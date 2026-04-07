@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>LOGISTICS HUB v15.7 (Cloud Final)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+  window.RAW_ZONES = {
+    SD2: ['시흥2SH','서초1SH','송파1SH','송파3SH','화성1SH','동탄1SH','군포1SH','야탑1SH','일산1SH','일산2SH','일산3SH','안산1SH','안양1SH'],
+    D1: ['시흥2SH','송파1SH','송파3SH','화성1SH','동탄1SH','군포1SH','야탑1SH','일산1SH','일산2SH','안양1SH','전주1SH','인천3SH','청주1SH','천안1SH','인천7SH','인천2SH','야탑2SH','대전2SH','안산1SH','동인천2SH']
+  };
+
+  window.ensureDataStructure = function(data) {
+    if(!data) data = {};
+    window.shData = data.shData || {};
+    if (!window.shData.SD2) window.shData.SD2 = {};
+    if (!window.shData.D1) window.shData.D1 = {};
+    window.rtCheck = data.rtCheck || {};
+    if (!window.rtCheck.SD2) window.rtCheck.SD2 = {};
+    if (!window.rtCheck.D1) window.rtCheck.D1 = {};
+    window.shConfig = data.shConfig || {};
+    if (!window.shConfig.SD2) window.shConfig.SD2 = {};
+    if (!window.shConfig.SD2.list || window.shConfig.SD2.list.length === 0) window.shConfig.SD2.list = [...window.RAW_ZONES.SD2];
+    if (!window.shConfig.D1) window.shConfig.D1 = {};
+    if (!window.shConfig.D1.list || window.shConfig.D1.list.length === 0) window.shConfig.D1.list = [...window.RAW_ZONES.D1];
+    if (!window.shConfig.SD2.fields) window.shConfig.SD2.fields = {};
+    if (!window.shConfig.D1.fields) window.shConfig.D1.fields = {};
+    window.toteItems = data.toteItems || [{id: Date.now(), type: 'NORMAL', val: 0, label: '항목 1'}];
+    window.dockData = data.dockData || [];
+    window.cheriData = data.cheriData || {};
+    if (!window.cheriData.tabs || window.cheriData.tabs.length === 0) window.cheriData.tabs = [{id: 1, name: '기본'}];
+    if (!window.cheriData.items) window.cheriData.items = [];
+    if (!window.cheriData.activeTabId) window.cheriData.activeTabId = window.cheriData.tabs[0].id;
+  };
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5elnzp59tYoTJ_7f1S67w94Cv9sqhHrs",
+    authDomain: "huburi-939df.firebaseapp.com",
+    projectId: "huburi-939df",
+    storageBucket: "huburi-939df.firebasestorage.app",
+    messagingSenderId: "975888471075",
+    appId: "1:975888471075:web:49596b4b27e35a2d370d96",
+    measurementId: "G-4Q82DMT5PB",
+    databaseURL: "https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/" 
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  window.dbRef = ref(db, 'logistics_hub_data'); 
+
+  onValue(window.dbRef, (snapshot) => {
+    window.ensureDataStructure(snapshot.val());
+    if (window.currentPage && typeof window.router === 'function') {
+      window.router(window.currentPage, true);
+    }
+  });
+
+  window.syncToCloud = () => {
+    if (!window.dbRef) return;
+    update(window.dbRef, {
+      shData: window.shData,
+      rtCheck: window.rtCheck,
+      shConfig: window.shConfig,
+      toteItems: window.toteItems,
+      dockData: window.dockData,
+      cheriData: window.cheriData
+    }).then(() => console.log("Cloud synced! 🍒"));
+  };
+</script>
+
+<style>
+  :root { --jelly: cubic-bezier(0.34, 1.56, 0.64, 1); --smooth: cubic-bezier(0.4, 0, 0.2, 1); --t2: 260ms; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #f1f5f9; display: flex; justify-content: center; align-items: flex-start; overflow-x: hidden; font-family: -apple-system, sans-serif; }
+  #app-container { width: 100%; max-width: 480px; min-height: 100vh; background: #f8fafc; position: relative; box-shadow: 0 0 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+  @media (min-width: 640px) { #app-container { margin: 20px 0; min-height: calc(100vh - 40px); border-radius: 32px; border: 8px solid #fff; overflow: hidden; } }
+  .page-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .hidden { display: none !important; }
+  .hazard-line { background: repeating-linear-gradient(45deg,#fbbf24,#fbbf24 10px,#000 10px,#000 20px); height: 6px; }
+  .page-enter { animation: pageUp var(--t2) var(--jelly) both; }
+  @keyframes pageUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .nav-btn { font-size: 1.3rem; padding: 8px; border-radius: 12px; transition: 0.2s; }
+  .nav-active { background: #0f172a; color: white; transform: scale(1.1); }
+  .sh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
+  .sh-tile { aspect-ratio: 1/0.9; border-radius: 20px; background: #fff; border: 2px solid #e2e8f0; font-weight: 900; font-style: italic; display: flex; align-items: center; justify-content: center; position: relative; transition: 0.2s; }
+  .sh-tile.filled { background: #0f172a; border-color: #fbbf24; color: #fbbf24; }
+  .sh-tile.done { opacity: 0.5; background: #f1f5f9; }
+  .rt-check { position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 6px; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); z-index: 9999; align-items: flex-end; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet { width: 100%; max-width: 480px; background: #fff; border-radius: 28px 28px 0 0; padding: 20px; transform: translateY(100%); transition: 0.3s var(--jelly); max-height: 90vh; overflow-y: auto; }
+  .modal-overlay.open .modal-sheet { transform: translateY(0); }
+  .replace-box { display: flex; align-items: center; justify-content: space-between; background: #fff1f2; padding: 14px; border-radius: 20px; border: 2px solid #fecdd3; margin-bottom: 20px; }
+  .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background-color: #cbd5e1; transition: .3s; border-radius: 34px; }
+  .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: #e11d48; }
+  input:checked + .slider:before { transform: translateX(24px); }
+  .fixed-bottom-wrap { position: fixed; bottom: 0; width: 100%; max-width: 480px; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+  .pad-btn { background: #1e293b; color: #fff; border-radius: 14px; font-weight: 900; padding: 16px 0; font-size: 1.2rem; }
+  .drag-handle { cursor: grab; color: #cbd5e1; padding-right: 12px; font-size: 1.2rem; }
+</style>
+</head>
+<body>
+
+<div id="app-container">
+  <header id="main-header" class="hidden sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b">
+    <div class="hazard-line"></div>
+    <div class="flex items-center justify-between px-4 py-2">
+      <div class="flex gap-1">
+        <button onclick="router('sh')" id="nav-sh" class="nav-btn">🚚</button>
+        <button onclick="router('tote')" id="nav-tote" class="nav-btn">✨</button>
+        <button onclick="router('rt')" id="nav-rt" class="nav-btn">🚛</button>
+        <button onclick="router('dock')" id="nav-dock" class="nav-btn">📋</button>
+        <button onclick="router('cheri')" id="nav-cheri" class="nav-btn">🍒</button>
+      </div>
+      <span class="text-[10px] font-black text-slate-400">HUB v15.7</span>
+    </div>
+    <div id="sh-tabs" class="hidden flex border-t bg-slate-50">
+      <button id="tab-sd2" class="flex-1 py-3 font-black text-xs transition-all" onclick="switchZone('SD2')">SD2 ZONE</button>
+      <button id="tab-d1" class="flex-1 py-3 font-black text-xs transition-all" onclick="switchZone('D1')">D1 ZONE</button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div id="page-landing" class="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-50 text-center">
+      <h1 class="text-5xl font-black italic mb-10 leading-none text-slate-900 uppercase">Logistics<br><span class="text-blue-600">Hub</span></h1>
+      <div class="grid grid-cols-1 gap-3 w-full max-w-xs">
+        <button onclick="router('sh')" class="bg-slate-900 text-white p-5 rounded-3xl font-black flex justify-between shadow-xl active:scale-95 transition-transform"><span>🚚 SH REPORT</span> <span>▶</span></button>
+        <button onclick="router('tote')" class="bg-indigo-600 text-white p-5 rounded-3xl font-black flex justify-between shadow-xl active:scale-95 transition-transform"><span>✨ TOTE MASTER</span> <span>▶</span></button>
+        <button onclick="router('dock')" class="bg-emerald-600 text-white p-5 rounded-3xl font-black flex justify-between shadow-xl active:scale-95 transition-transform"><span>📋 차량 정보 확인</span> <span>▶</span></button>
+        <button onclick="router('rt')" class="bg-amber-500 text-white p-5 rounded-3xl font-black flex justify-between shadow-xl active:scale-95 transition-transform"><span>🚛 RT 상하차</span> <span>▶</span></button>
+        <button onclick="router('cheri')" class="bg-pink-500 text-white p-5 rounded-3xl font-black flex justify-between shadow-xl active:scale-95 transition-transform"><span>🍒 체리뽀 CHECK</span> <span>▶</span></button>
+      </div>
+    </div>
+
+    <div id="page-sh" class="hidden">
+      <div class="p-4 flex justify-between items-center bg-white border-b sticky top-0 z-10 shadow-sm">
+        <span class="font-black text-slate-800 italic text-lg" id="sh-title">SD2 REPORT</span>
+        <div class="flex gap-2">
+          <button onclick="openShManageModal()" class="text-[10px] font-black bg-amber-100 text-amber-700 px-3 py-1 rounded-full">목록 관리</button>
+          <button onclick="resetCurrentZone()" class="text-[10px] font-black border border-red-200 text-red-500 px-3 py-1 rounded-full">리셋</button>
+        </div>
+      </div>
+      <div id="sh-grid" class="sh-grid pb-10"></div>
+    </div>
+
+    <div id="page-tote" class="hidden min-h-screen bg-[#08080c] text-white pb-48">
+      <div class="p-6 flex justify-between items-center sticky top-0 bg-[#08080c]/90 backdrop-blur-md z-10">
+        <h2 class="text-2xl font-black italic text-indigo-400">TOTE MASTER</h2>
+        <div class="flex gap-2">
+          <button onclick="addToteItem()" class="bg-indigo-600 px-3 py-2 rounded-xl text-[10px] font-black active:scale-95">+ 추가</button>
+          <button onclick="copyToteReport()" class="bg-emerald-600 px-3 py-2 rounded-xl text-[10px] font-black active:scale-95">📋 복사</button>
+        </div>
+      </div>
+      <div id="tote-list" class="px-6 flex flex-col gap-4"></div>
+      <div class="fixed-bottom-wrap" onclick="copyToteTotal()">
+        <div class="p-6 bg-black border-t-4 border-emerald-400 text-center shadow-[0_-20px_40px_rgba(0,0,0,0.5)]">
+          <span id="tote-grand-total" class="text-5xl font-black text-emerald-400">0</span>
+          <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-widest">Grand Total (PT)</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-dock" class="hidden p-4 bg-slate-50 min-h-screen pb-20">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-black italic text-slate-800">📋 차량 입차 관리</h2>
+        <div class="flex gap-2">
+          <button onclick="openExcelModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-[11px] font-black active:scale-95 shadow-md">엑셀 붙여넣기</button>
+          <button onclick="resetDockData()" class="bg-white text-rose-500 border-2 border-rose-100 px-3 py-2 rounded-xl text-[11px] font-black active:scale-95 shadow-sm">초기화</button>
+        </div>
+      </div>
+      
+      <div class="mb-4 flex flex-col gap-2">
+        <input type="text" id="dock-search" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none text-slate-800 shadow-sm focus:border-indigo-400 transition-colors" placeholder="🔍 차량번호 검색..." oninput="updateDockSearch(this.value)">
+        <div class="flex gap-2">
+          <select id="dock-filter-type" onchange="dockFilterType=this.value; renderDockTable()" class="flex-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 font-bold text-xs outline-none text-slate-700 shadow-sm">
+            <option value="">종류 (전체)</option>
+          </select>
+          <select id="dock-filter-origin" onchange="dockFilterOrigin=this.value; renderDockTable()" class="flex-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 font-bold text-xs outline-none text-slate-700 shadow-sm">
+            <option value="">출발지 (전체)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="dock-container" class="flex flex-col gap-3 min-h-[300px]"></div>
+    </div>
+
+    <div id="page-rt" class="hidden p-5 bg-white min-h-screen">
+      <h2 class="text-2xl font-black italic mb-5 text-slate-800">🚛 RT 상하차</h2>
+      <div class="bg-white rounded-[2rem] p-6 shadow-xl border border-slate-100 flex flex-col gap-5">
+        <input type="text" id="rt-vehicle" class="w-full p-4 bg-slate-50 rounded-2xl font-black text-2xl outline-none" placeholder="차량 번호">
+        <input type="number" id="rt-unload" class="w-full p-4 bg-blue-50 rounded-2xl font-black text-3xl text-blue-600 outline-none" placeholder="하차 RT">
+        <input type="number" id="rt-load" class="w-full p-4 bg-emerald-50 rounded-2xl font-black text-3xl text-emerald-600 outline-none" placeholder="상차 RT">
+        <button onclick="copyRT()" class="mt-2 bg-slate-900 text-white py-5 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-lg">복사하기</button>
+      </div>
+    </div>
+
+    <div id="page-cheri" class="hidden p-4 bg-pink-50 min-h-screen pb-36">
+      <div class="flex items-center gap-2 sticky top-0 bg-pink-50/90 z-10 mb-4 pb-2">
+        <div id="cheri-tab-list" class="flex gap-2 overflow-x-auto no-scrollbar flex-1"></div>
+        <button onclick="uncheckAllCheri()" class="shrink-0 bg-white border-2 border-pink-300 text-pink-500 w-10 h-10 flex items-center justify-center rounded-full font-black text-lg shadow active:scale-90" title="체크 전체 해제">↺</button>
+      </div>
+      <div id="cheri-content" class="flex flex-col gap-3"></div>
+      <div class="fixed-bottom-wrap">
+        <div class="p-4 bg-white/90 backdrop-blur-md border-t flex gap-2 shadow-[0_-10px_20px_rgba(255,192,203,0.3)]">
+          <input type="text" id="cheri-input" class="flex-1 p-4 bg-pink-50 rounded-full outline-none font-bold text-slate-700" placeholder="할 일을 입력해뽀 🍒" onkeypress="if(event.key==='Enter') addCheriItem()">
+          <button onclick="addCheriItem()" class="bg-pink-500 text-white w-14 h-14 flex items-center justify-center rounded-full font-black text-2xl shadow-lg active:scale-90">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sh-modal" class="modal-overlay" onclick="if(event.target===this)closeShModal()">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-6">
+      <h2 id="modal-sh-name" class="text-2xl font-black italic underline decoration-blue-500 decoration-4 underline-offset-4"></h2>
+      <button onclick="openFieldManager()" class="text-[11px] font-black bg-blue-50 text-blue-600 px-4 py-2 rounded-full border border-blue-200">+ 존 관리</button>
+    </div>
+    <div id="modal-fields" class="grid grid-cols-3 gap-3 mb-4"></div>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="modal-input-wrap cursor-pointer" onclick="openCalc('tote')">
+        <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">Tote 🧮</label>
+        <input id="m-tote" readonly class="w-full bg-transparent font-black text-xl outline-none pointer-events-none text-slate-900" placeholder="0">
+      </div>
+      <div class="modal-input-wrap">
+        <label class="text-[10px] font-black text-slate-400 uppercase block mb-1">각대</label>
+        <input id="m-kd" type="number" class="w-full bg-transparent font-black text-xl outline-none text-slate-900" placeholder="0">
+      </div>
+    </div>
+    <textarea id="m-note" class="w-full p-4 bg-slate-50 rounded-2xl font-bold mb-4 outline-none h-24 border-2 border-slate-100" placeholder="특이사항 입력"></textarea>
+    <div class="replace-box">
+      <span class="font-black text-rose-600 text-sm flex items-center gap-2">📦 토트 대체 마감</span>
+      <label class="switch"><input type="checkbox" id="m-replace-check" onchange="handleReplaceToggle(this.checked)"><span class="slider"></span></label>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button onclick="resetShItem()" class="flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-500">초기화</button>
+      <button onclick="saveAndCopySh()" class="flex-[2] bg-slate-900 text-white py-4 rounded-2xl font-black italic shadow-xl text-lg">저장 & 복사</button>
+    </div>
+  </div>
+</div>
+
+<div id="field-modal" class="modal-overlay" onclick="if(event.target===this)closeFieldManager()">
+  <div class="modal-sheet">
+    <h3 class="text-xl font-black italic mb-5">팔레트존 순서 관리</h3>
+    <div id="field-list" class="flex flex-col gap-2 mb-6 max-h-64 overflow-y-auto pr-2"></div>
+    <div class="bg-slate-50 p-4 rounded-2xl border-2">
+      <input id="new-field-label" type="text" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold outline-none" placeholder="새 존 이름">
+      <button onclick="addNewField()" class="w-full mt-2 bg-indigo-600 text-white py-3 rounded-xl font-black">추가</button>
+    </div>
+    <button onclick="closeFieldManager()" class="w-full mt-5 py-4 font-black text-slate-400">닫기</button>
+  </div>
+</div>
+
+<div id="sh-manage-modal" class="modal-overlay" onclick="if(event.target===this)closeShManageModal()">
+  <div class="modal-sheet">
+    <h3 class="text-xl font-black italic mb-5">SH 목록 관리</h3>
+    <div id="sh-manage-list" class="flex flex-col gap-2 mb-6 max-h-60 overflow-y-auto pr-2"></div>
+    <div class="bg-amber-50 p-4 rounded-2xl border-2 border-amber-200">
+      <input id="new-sh-name" type="text" class="w-full bg-white border border-amber-200 rounded-xl px-4 py-3 font-bold outline-none mb-2" placeholder="새 SH 이름">
+      <button onclick="addNewSH()" class="w-full bg-amber-500 text-white py-3 rounded-xl font-black">추가</button>
+    </div>
+    <button onclick="closeShManageModal()" class="w-full mt-5 py-4 font-black text-slate-400">닫기</button>
+  </div>
+</div>
+
+<div id="calc-modal" class="modal-overlay" onclick="if(event.target===this)closeCalc()">
+  <div class="modal-sheet bg-slate-900 !rounded-[2rem]">
+    <div class="bg-black/40 p-5 rounded-3xl mb-5 text-right text-white">
+      <div id="calc-formula" class="text-white/40 text-sm mb-2 truncate font-mono">0</div>
+      <div id="calc-preview" class="text-emerald-400 text-5xl font-black tracking-tighter">= 0</div>
+    </div>
+    <div class="grid grid-cols-4 gap-3">
+      <button class="pad-btn bg-slate-800" onclick="pIn('7')">7</button><button class="pad-btn bg-slate-800" onclick="pIn('8')">8</button><button class="pad-btn bg-slate-800" onclick="pIn('9')">9</button><button class="pad-btn bg-rose-600 shadow-lg shadow-rose-900/50" onclick="pC()">C</button>
+      <button class="pad-btn bg-slate-800" onclick="pIn('4')">4</button><button class="pad-btn bg-slate-800" onclick="pIn('5')">5</button><button class="pad-btn bg-slate-800" onclick="pIn('6')">6</button><button class="pad-btn bg-indigo-600 shadow-lg shadow-indigo-900/50" onclick="pOp('+')">+</button>
+      <button class="pad-btn bg-slate-800" onclick="pIn('1')">1</button><button class="pad-btn bg-slate-800" onclick="pIn('2')">2</button><button class="pad-btn bg-slate-800" onclick="pIn('3')">3</button><button class="pad-btn bg-indigo-600 shadow-lg shadow-indigo-900/50" onclick="pOp('-')">-</button>
+      <button class="pad-btn bg-slate-800" onclick="pIn('0')">0</button><button class="pad-btn bg-slate-800 text-amber-400 text-xl" onclick="pBk()">⌫</button><button class="pad-btn col-span-2 bg-emerald-500 shadow-xl shadow-emerald-900/50 text-xl italic" onclick="pOk()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="excel-modal" class="modal-overlay" onclick="if(event.target===this)closeExcelModal()">
+  <div class="modal-sheet">
+    <h3 class="text-xl font-black italic mb-4">엑셀 데이터 입력</h3>
+    
+    <div class="mb-4">
+      <div class="flex justify-between items-end mb-2">
+        <p class="text-[11px] text-indigo-600 font-bold leading-tight">📋 항목 이동(☰) / 수정(이름 터치) / 삭제(✕)<br>불필요한 열은 지우고 엑셀 순서에 맞춰뽀!</p>
+        <button onclick="addExcelHeader()" class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg active:scale-95 shrink-0 whitespace-nowrap">+ 새 항목 추가</button>
+      </div>
+      <div id="excel-header-list" class="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border-2 border-slate-200 min-h-[60px]">
+        </div>
+    </div>
+
+    <div class="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mb-4">
+      <textarea id="excel-input" class="w-full h-32 bg-transparent outline-none text-sm font-medium text-slate-700 leading-relaxed" placeholder="위 설정된 순서대로 복사된 엑셀 데이터를 여기에 붙여넣어뽀..."></textarea>
+    </div>
+    <button onclick="parseExcelData()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition-transform shadow-xl">데이터 적용하기</button>
+    <button onclick="closeExcelModal()" class="w-full mt-4 py-3 font-black text-slate-400">닫기</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-emerald-400 px-6 py-3 rounded-full font-black text-sm opacity-0 pointer-events-none transition-all z-[9999] shadow-2xl"></div>
+
+<script>
+window.currentPage = 'landing';
+let activeZone = 'SD2', currentSh = null;
+
+// Dock Variables & Dynamic Header Management
+let dockSearchTerm = '';
+let dockFilterType = '';
+let dockFilterOrigin = '';
+
+// 기본 헤더 구조 설정 (isCore: true인 항목은 핵심 필드로 간주)
+let defaultHeaders = [
+  { id: 'h_carNum', key: 'carNum', label: '차량번호', isCore: true },
+  { id: 'h_type', key: 'type', label: '종류', isCore: true },
+  { id: 'h_origin', key: 'origin', label: '출발지', isCore: true },
+  { id: 'h_qty', key: 'qty', label: '수량', isCore: true },
+  { id: 'h_time', key: 'time', label: '시간', isCore: true },
+  { id: 'h_phone', key: 'phone', label: '연락처', isCore: true }
+];
+
+let excelHeaders = JSON.parse(localStorage.getItem('excelHeaders_v15_2'));
+if (!excelHeaders || excelHeaders.length === 0) {
+  excelHeaders = [...defaultHeaders];
+}
+
+const savedData = {
+  shData: JSON.parse(localStorage.getItem('shData_v15')),
+  rtCheck: JSON.parse(localStorage.getItem('rtCheck_v15')),
+  shConfig: JSON.parse(localStorage.getItem('shConfig_v15')),
+  toteItems: JSON.parse(localStorage.getItem('toteItems_v15')),
+  dockData: JSON.parse(localStorage.getItem('dockData_v15')),
+  cheriData: JSON.parse(localStorage.getItem('cheriData_v15'))
+};
+window.ensureDataStructure(savedData);
+
+function getFields(z, n) {
+  if(window.shConfig[z] && window.shConfig[z].fields && window.shConfig[z].fields[n]) {
+    return window.shConfig[z].fields[n];
+  }
+  if(n === '인천7SH') return [{key:'nu', label:'누'},{key:'mun', label:'문'},{key:'ts', label:'토트'}];
+  if(z === 'D1' && n === '야탑1SH') return [{key:'yt1', label:'야탑1PT'},{key:'yt2', label:'야탑2PT'},{key:'ssi', label:'쓰PT'}];
+  return [{key:'pt', label:'PT'}];
+}
+
+function localBackup() {
+  localStorage.setItem('shData_v15', JSON.stringify(window.shData));
+  localStorage.setItem('rtCheck_v15', JSON.stringify(window.rtCheck));
+  localStorage.setItem('shConfig_v15', JSON.stringify(window.shConfig));
+  localStorage.setItem('toteItems_v15', JSON.stringify(window.toteItems));
+  localStorage.setItem('dockData_v15', JSON.stringify(window.dockData));
+  localStorage.setItem('cheriData_v15', JSON.stringify(window.cheriData));
+}
+
+function router(p, isSync = false) {
+  if(!isSync) {
+    document.querySelectorAll('body div[id^="page"]').forEach(el => el.classList.add('hidden'));
+    const target = document.getElementById('page-' + p);
+    if(target) { target.classList.remove('hidden'); target.classList.add('page-enter'); }
+    
+    document.getElementById('main-header').classList.toggle('hidden', p === 'landing');
+    document.getElementById('sh-tabs').classList.toggle('hidden', p !== 'sh');
+    
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-active'));
+    if(document.getElementById('nav-'+p)) document.getElementById('nav-'+p).classList.add('nav-active');
+    window.currentPage = p;
+  }
+  
+  if(p === 'sh') renderGrid();
+  if(p === 'tote') renderToteList();
+  if(p === 'dock') renderDockTable();
+  if(p === 'cheri') renderCheriUI();
+  if(!isSync) document.querySelector('.page-content').scrollTop = 0;
+}
+
+function renderGrid() {
+  const g = document.getElementById('sh-grid'); 
+  if(!g) return;
+  g.innerHTML = '';
+  document.getElementById('sh-title').innerText = `${activeZone} REPORT`;
+  
+  const list = window.shConfig[activeZone].list || window.RAW_ZONES[activeZone];
+  list.forEach(name => {
+    const d = window.shData[activeZone][name] || {};
+    const filled = Object.keys(d).some(k => k!=='note' && k!=='isReplace' && (d[k]>0));
+    const done = window.rtCheck[activeZone][name];
+    
+    const tile = document.createElement('div');
+    tile.className = `sh-tile shadow-sm ${filled ? 'filled' : ''} ${done ? 'done' : ''}`;
+    tile.innerHTML = `<button class="rt-check" onclick="toggleRt(event, '${name}')">${done?'✓':''}</button><span>${name.replace('SH','')}</span>`;
+    tile.onclick = () => openShModal(name);
+    g.appendChild(tile);
+  });
+
+  document.getElementById('tab-sd2').className = `flex-1 py-3 font-black text-xs transition-all ${activeZone==='SD2'?'bg-white border-b-4 border-slate-900 text-slate-900':'text-slate-400'}`;
+  document.getElementById('tab-d1').className = `flex-1 py-3 font-black text-xs transition-all ${activeZone==='D1'?'bg-white border-b-4 border-slate-900 text-slate-900':'text-slate-400'}`;
+}
+
+function switchZone(z) { activeZone = z; renderGrid(); }
+
+function toggleRt(e, n) { 
+  e.stopPropagation(); 
+  if(!window.rtCheck[activeZone]) window.rtCheck[activeZone] = {};
+  window.rtCheck[activeZone][n] = !window.rtCheck[activeZone][n]; 
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  renderGrid(); 
+}
+
+function resetCurrentZone() { 
+  if(confirm(`${activeZone} 구역 데이터를 싹 초기화할까?`)) { 
+    window.shData[activeZone] = {}; 
+    window.rtCheck[activeZone] = {}; 
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    renderGrid(); 
+  } 
+}
+
+function openShModal(name) {
+  currentSh = name;
+  const fields = getFields(activeZone, name);
+  const data = window.shData[activeZone][name] || {};
+  document.getElementById('modal-sh-name').innerText = name;
+  
+  document.getElementById('modal-fields').innerHTML = fields.map(f => `
+    <div class="modal-input-wrap">
+      <label class="text-[9px] font-black text-slate-400 uppercase block mb-1">${f.label}</label>
+      <input type="number" id="m-${f.key}" value="${data[f.key]||''}" class="w-full bg-transparent font-black text-2xl outline-none text-slate-800" placeholder="0">
+    </div>`).join('');
+    
+  document.getElementById('m-tote').value = data.tote || '';
+  document.getElementById('m-kd').value = data.kd || '';
+  document.getElementById('m-note').value = data.note || '';
+  document.getElementById('m-replace-check').checked = data.isReplace || false;
+  
+  document.getElementById('sh-modal').classList.add('open');
+}
+
+function closeShModal() { document.getElementById('sh-modal').classList.remove('open'); }
+
+function resetShItem() { 
+  if(confirm('이 카드를 리셋할까?')) { 
+    delete window.shData[activeZone][currentSh]; 
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    closeShModal(); 
+    renderGrid(); 
+  } 
+}
+
+function handleReplaceToggle(checked) {
+  if (checked) {
+    const noteEl = document.getElementById('m-note');
+    if (noteEl.value.trim() === '' || noteEl.value.trim() === '없음') {
+      noteEl.value = '';
+      noteEl.focus();
+    }
+  }
+}
+
+function saveAndCopySh() {
+  const fields = getFields(activeZone, currentSh);
+  if(!window.shData[activeZone]) window.shData[activeZone] = {};
+  if(!window.shData[activeZone][currentSh]) window.shData[activeZone][currentSh] = {};
+  
+  let report = `**${currentSh}\n`;
+  fields.forEach(f => {
+    const v = document.getElementById(`m-${f.key}`).value;
+    window.shData[activeZone][currentSh][f.key] = v;
+    report += `${f.label} : ${v || 0}\n`;
+  });
+  
+  window.shData[activeZone][currentSh].tote = document.getElementById('m-tote').value;
+  window.shData[activeZone][currentSh].kd = document.getElementById('m-kd').value;
+  window.shData[activeZone][currentSh].note = document.getElementById('m-note').value;
+  window.shData[activeZone][currentSh].isReplace = document.getElementById('m-replace-check').checked;
+  
+  let noteValue = window.shData[activeZone][currentSh].note;
+  if (!noteValue || noteValue.trim() === '' || noteValue.trim() === '없음') {
+    noteValue = window.shData[activeZone][currentSh].isReplace ? '' : '없음';
+  }
+
+  report += `토트 : ${window.shData[activeZone][currentSh].tote || 0}\n각대 : ${window.shData[activeZone][currentSh].kd || 0}\n특이사항 : ${noteValue}`;
+  
+  if(window.shData[activeZone][currentSh].isReplace) {
+    report += noteValue ? ` (토트 대체 박스)` : `(토트 대체 박스)`;
+  }
+  
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  
+  navigator.clipboard.writeText(report).then(() => { 
+    showToast('저장 및 복사 완료! 🚚'); 
+    closeShModal(); 
+    renderGrid(); 
+  });
+}
+
+let fieldSortable = null;
+function openFieldManager() {
+  const fields = [...getFields(activeZone, currentSh)];
+  renderFieldManagerList(fields);
+  document.getElementById('field-modal').classList.add('open');
+
+  const listEl = document.getElementById('field-list');
+  if(fieldSortable) fieldSortable.destroy();
+  fieldSortable = new Sortable(listEl, {
+    animation: 150, 
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    onEnd: function() {
+      const newFields = [];
+      listEl.querySelectorAll('[data-key]').forEach(el => {
+        newFields.push({ key: el.getAttribute('data-key'), label: el.getAttribute('data-label') });
+      });
+      window.shConfig[activeZone].fields[currentSh] = newFields;
+      localBackup();
+      if(window.syncToCloud) window.syncToCloud();
+      openShModal(currentSh);
+    }
+  });
+}
+
+function renderFieldManagerList(fields) {
+  const list = document.getElementById('field-list');
+  list.innerHTML = fields.map((f, i) => `
+    <div class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm" data-key="${f.key}" data-label="${f.label}">
+      <div class="flex items-center"><span class="drag-handle text-slate-300">☰</span><span class="font-bold text-slate-700">${f.label}</span></div>
+      <button onclick="removeField(${i})" class="text-rose-500 font-black px-3 py-1 bg-rose-50 rounded-lg active:scale-95">삭제</button>
+    </div>`).join('');
+}
+
+function addNewField() {
+  const label = document.getElementById('new-field-label').value.trim(); 
+  if(!label) return;
+  const fields = getFields(activeZone, currentSh); 
+  fields.push({key: 'c_'+Date.now(), label});
+  window.shConfig[activeZone].fields[currentSh] = fields;
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  
+  document.getElementById('new-field-label').value = ''; 
+  renderFieldManagerList(fields); 
+  openShModal(currentSh);
+}
+
+function removeField(i) {
+  const fields = getFields(activeZone, currentSh); 
+  fields.splice(i, 1);
+  window.shConfig[activeZone].fields[currentSh] = fields;
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  renderFieldManagerList(fields); 
+  openShModal(currentSh);
+}
+
+function closeFieldManager() { document.getElementById('field-modal').classList.remove('open'); }
+
+function openShManageModal() {
+  renderShManageList();
+  document.getElementById('sh-manage-modal').classList.add('open');
+}
+function closeShManageModal() { document.getElementById('sh-manage-modal').classList.remove('open'); }
+
+function renderShManageList() {
+  const listEl = document.getElementById('sh-manage-list');
+  const currentList = window.shConfig[activeZone].list || window.RAW_ZONES[activeZone];
+  
+  listEl.innerHTML = currentList.map((name, i) => `
+    <div class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200">
+      <span class="font-bold text-slate-800">${name}</span>
+      <button onclick="removeSH(${i})" class="text-rose-500 font-black px-3 py-1 bg-rose-50 rounded-lg active:scale-95">삭제</button>
+    </div>
+  `).join('');
+}
+
+function addNewSH() {
+  const name = document.getElementById('new-sh-name').value.trim();
+  if(!name) return;
+  const currentList = window.shConfig[activeZone].list || [...window.RAW_ZONES[activeZone]];
+  if(currentList.includes(name)) { alert('이미 존재하는 곳이야!'); return; }
+  
+  currentList.push(name);
+  window.shConfig[activeZone].list = currentList;
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  
+  document.getElementById('new-sh-name').value = '';
+  renderShManageList();
+  renderGrid();
+}
+
+function removeSH(i) {
+  const currentList = window.shConfig[activeZone].list || [...window.RAW_ZONES[activeZone]];
+  const removedName = currentList[i];
+  if(!confirm(`정말 '${removedName}'을(를) 삭제할까?`)) return;
+  
+  currentList.splice(i, 1);
+  window.shConfig[activeZone].list = currentList;
+  
+  if(window.shData[activeZone] && window.shData[activeZone][removedName]) delete window.shData[activeZone][removedName];
+  if(window.rtCheck[activeZone] && window.rtCheck[activeZone][removedName]) delete window.rtCheck[activeZone][removedName];
+  
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  renderShManageList();
+  renderGrid();
+}
+
+function addToteItem() { 
+  window.toteItems.push({id: Date.now(), type: 'NORMAL', val: 0, label: `항목 ${window.toteItems.length + 1}`}); 
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud(); 
+  renderToteList(); 
+}
+
+function renderToteList() {
+  const list = document.getElementById('tote-list'); 
+  if(!list) return;
+  list.innerHTML = ''; 
+  let g = 0;
+  
+  window.toteItems.forEach((item, idx) => {
+    const conv = item.type === 'RT' ? Math.round(item.val * 80 / 96) : item.val; 
+    g += conv;
+    
+    const card = document.createElement('div'); 
+    card.className = 'bg-[#15151e] border border-[#2d2d3d] p-5 rounded-3xl mb-4 shadow-lg';
+    card.innerHTML = `
+      <div class="flex justify-between items-center mb-4 gap-2">
+        <input type="text" value="${item.label || ''}" onchange="uTLabel(${idx},this.value)" class="flex-1 bg-slate-800/50 text-indigo-400 font-black text-sm px-3 py-2 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500" placeholder="제목 수정">
+        <select onchange="uTType(${idx},this.value)" class="bg-slate-800 text-indigo-300 text-[10px] font-black px-2 py-2 rounded-xl outline-none border border-slate-700">
+          <option value="NORMAL" ${item.type==='NORMAL'?'selected':''}>일반 수량</option>
+          <option value="RT" ${item.type==='RT'?'selected':''}>RT 환산 (80/96)</option>
+        </select>
+        <button onclick="rTItem(${idx})" class="text-rose-500 bg-rose-500/10 px-3 py-2 rounded-xl text-[10px] font-black">삭제</button>
+      </div>
+      <div class="flex items-center gap-4">
+        <input type="number" value="${item.val}" onchange="uTVal(${idx},this.value)" class="flex-1 bg-transparent text-4xl font-black outline-none border-b-2 border-indigo-900/50 text-white focus:border-indigo-500 transition-colors py-1">
+        <div class="text-right">
+          <div class="text-[9px] text-slate-500 font-black mb-1 uppercase">PT Result</div>
+          <div class="text-indigo-400 font-black text-2xl">${conv}</div>
+        </div>
+      </div>`;
+    list.appendChild(card);
+  });
+  
+  document.getElementById('tote-grand-total').innerText = g.toLocaleString();
+}
+
+function uTVal(i, v) { window.toteItems[i].val = parseInt(v)||0; localBackup(); if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+function uTType(i, t) { window.toteItems[i].type = t; localBackup(); if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+function uTLabel(i, l) { window.toteItems[i].label = l; localBackup(); if(window.syncToCloud) window.syncToCloud(); }
+function rTItem(i) { window.toteItems.splice(i,1); localBackup(); if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+
+function copyToteReport() {
+  let report = "";
+  let total = 0;
+  window.toteItems.forEach(item => {
+    const conv = item.type === 'RT' ? Math.round(item.val * 80 / 96) : item.val;
+    report += `${item.label || '항목'} : ${conv}\n`;
+    total += conv;
+  });
+  report += `총합 : ${total}`;
+  navigator.clipboard.writeText(report).then(() => showToast('Tote 리포트 복사 완료! ✨'));
+}
+
+/* =======================================
+   Dock Data Functions (차량 입차 관리)
+======================================= */
+let excelHeaderSortable = null;
+
+function saveExcelHeaders() {
+  localStorage.setItem('excelHeaders_v15_2', JSON.stringify(excelHeaders));
+}
+
+// 모달 내 동적 헤더 렌더링
+function renderExcelHeaderUI() {
+  const listEl = document.getElementById('excel-header-list');
+  if(!listEl) return;
+  
+  listEl.innerHTML = excelHeaders.map((h) => `
+    <div class="excel-header-item flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 text-[11px] font-black text-slate-700 shadow-sm transition-all" data-id="${h.id}">
+      <span class="cursor-grab active:cursor-grabbing text-slate-300 header-drag-handle">☰</span>
+      <span class="truncate max-w-[80px] cursor-pointer hover:text-indigo-500" onclick="editExcelHeader('${h.id}')">${h.label}</span>
+      <button onclick="delExcelHeader('${h.id}')" class="text-rose-400 hover:text-rose-600 ml-1">✕</button>
+    </div>
+  `).join('');
+
+  if(excelHeaderSortable) excelHeaderSortable.destroy();
+  excelHeaderSortable = new Sortable(listEl, {
+    animation: 150,
+    handle: '.header-drag-handle',
+    ghostClass: 'opacity-50',
+    onEnd: function() {
+      const domItems = Array.from(listEl.querySelectorAll('.excel-header-item'));
+      const newOrderIds = domItems.map(el => el.dataset.id);
+      excelHeaders = newOrderIds.map(id => excelHeaders.find(h => h.id === id));
+      saveExcelHeaders();
+    }
+  });
+}
+
+function openExcelModal() { 
+  renderExcelHeaderUI();
+  document.getElementById('excel-modal').classList.add('open'); 
+}
+function closeExcelModal() { document.getElementById('excel-modal').classList.remove('open'); }
+
+// 커스텀 헤더 추가/수정/삭제 로직
+window.addExcelHeader = function() {
+  const label = prompt('추가할 새로운 항목 이름을 입력해뽀 (예: 비고, 기사명):');
+  if(label && label.trim()) {
+    excelHeaders.push({ id: 'h_' + Date.now(), key: 'custom_' + Date.now(), label: label.trim(), isCore: false });
+    saveExcelHeaders(); 
+    renderExcelHeaderUI();
+  }
+};
+
+window.editExcelHeader = function(id) {
+  const target = excelHeaders.find(h => h.id === id);
+  if(!target) return;
+  const newLabel = prompt('항목 이름을 수정해뽀:', target.label);
+  if(newLabel && newLabel.trim()) { 
+    target.label = newLabel.trim(); 
+    saveExcelHeaders(); 
+    renderExcelHeaderUI(); 
+  }
+};
+
+window.delExcelHeader = function(id) {
+  const target = excelHeaders.find(h => h.id === id);
+  if(target && target.isCore) {
+    if(!confirm(`'${target.label}' 항목은 기본 양식이야. 지우면 화면에 표시되지 않을 수 있어. 그래도 지울까?`)) return;
+  } else {
+    if(!confirm('이 항목을 엑셀 매핑에서 제외할까?')) return;
+  }
+  excelHeaders = excelHeaders.filter(h => h.id !== id);
+  saveExcelHeaders(); 
+  renderExcelHeaderUI();
+};
+
+function updateDockSearch(val) { 
+  dockSearchTerm = val.trim(); 
+  renderDockTable(); 
+}
+
+function resetDockData() {
+  if(!confirm('모든 차량 입차 데이터를 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)')) return;
+  window.dockData = [];
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  renderDockTable();
+}
+
+function parseExcelData() {
+  const raw = document.getElementById('excel-input').value.trim(); 
+  if(!raw) return;
+
+  const newItems = raw.split('\n').map(row => { 
+    const cols = row.split('\t'); 
+    let obj = { id: 'dock_' + Date.now() + Math.random().toString(36).substr(2, 9), done: false };
+    
+    // 설정된 헤더 순서대로 데이터 매핑
+    excelHeaders.forEach((h, idx) => {
+      obj[h.key] = cols[idx]?.trim() || '-';
+    });
+    
+    // 필수 데이터 누락 방어
+    ['carNum','type','origin','qty','time','phone'].forEach(k => { 
+      if(!obj[k]) obj[k] = '-'; 
+    });
+    
+    return obj; 
+  });
+  
+  window.dockData = [...window.dockData, ...newItems];
+  localBackup();
+  if(window.syncToCloud) window.syncToCloud();
+  renderDockTable();
+  
+  document.getElementById('excel-input').value = '';
+  closeExcelModal();
+  showToast('데이터 적용 완료! 📋');
+}
+
+function toggleDockDone(id) {
+  const item = window.dockData.find(d => d.id === id);
+  if(item) {
+    item.done = !item.done;
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    renderDockTable();
+  }
+}
+
+window.updateDockField = function(id, field, value) {
+  const item = window.dockData.find(d => d.id === id);
+  if(item) {
+    item[field] = value;
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    if(field === 'carNum') renderDockTable(); 
+  }
+}
+
+window.editCarNum = function(id) {
+  const item = window.dockData.find(d => d.id === id);
+  if(!item) return;
+  const newNum = prompt('차량번호를 수정해뽀:', item.carNum);
+  if(newNum !== null && newNum.trim() !== '') {
+    item.carNum = newNum.trim();
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    renderDockTable();
+  }
+}
+
+function renderDockTable() {
+  const con = document.getElementById('dock-container');
+  if(!con) return;
+
+  // 레거시 호환성 처리
+  window.dockData.forEach(d => {
+    if(!d.id) d.id = 'dock_' + Date.now() + Math.random().toString(36).substr(2, 9);
+    if(d.origin === undefined) d.origin = '-';
+    if(d.qty === undefined) d.qty = '-';
+    if(d.done === undefined) d.done = false;
+  });
+
+  const typeSelect = document.getElementById('dock-filter-type');
+  const originSelect = document.getElementById('dock-filter-origin');
+  
+  const types = [...new Set(window.dockData.map(d => d.type))].filter(t => t !== '-');
+  const origins = [...new Set(window.dockData.map(d => d.origin))].filter(o => o !== '-');
+
+  if(typeSelect && originSelect) {
+    typeSelect.innerHTML = `<option value="">종류 (전체)</option>` + types.map(t => `<option value="${t}" ${dockFilterType===t?'selected':''}>${t}</option>`).join('');
+    originSelect.innerHTML = `<option value="">출발지 (전체)</option>` + origins.map(o => `<option value="${o}" ${dockFilterOrigin===o?'selected':''}>${o}</option>`).join('');
+  }
+
+  if(window.dockData.length === 0) {
+    con.innerHTML = `<p class="p-8 text-center text-slate-400 font-bold text-sm">입력된 차량 데이터가 없어뽀.</p>`;
+    return;
+  }
+
+  let filtered = window.dockData.filter(d => {
+    if(dockSearchTerm && !d.carNum.includes(dockSearchTerm)) return false;
+    if(dockFilterType && d.type !== dockFilterType) return false;
+    if(dockFilterOrigin && d.origin !== dockFilterOrigin) return false;
+    return true;
+  });
+
+  if(filtered.length === 0) {
+    con.innerHTML = `<p class="p-8 text-center text-slate-400 font-bold text-sm">조건에 맞는 차량이 없어뽀...</p>`;
+    return;
+  }
+
+  // 커스텀 헤더 필드 식별 (기본 6개 제외)
+  const customHeaders = excelHeaders.filter(h => !['carNum','type','origin','qty','time','phone'].includes(h.key));
+
+  let h = '';
+  filtered.forEach(d => {
+    const rowClass = d.done ? 'bg-slate-100 grayscale opacity-60' : 'bg-white';
+    
+    // 차량번호 정규식 파싱 (공백 포함하여 끝에 있는 4자리 숫자 분리)
+    let carPrefix = d.carNum;
+    let carSuffix = '';
+    const carMatch = d.carNum.match(/(.*?)\s*(\d{4})$/);
+    if(carMatch) {
+      carPrefix = carMatch[1].trim();
+      carSuffix = carMatch[2];
+    } else {
+      carPrefix = ''; 
+      carSuffix = d.carNum;
+    }
+
+    // 시간 정규식 파싱 (HH:MM 형식만 추출)
+    let timeDisplay = d.time;
+    const timeMatch = d.time.match(/\b(\d{1,2}:\d{2})\b/);
+    if(timeMatch) {
+      timeDisplay = timeMatch[1];
+    }
+
+    // 커스텀 데이터 칩(Chip) HTML 생성
+    let customHtml = '';
+    if(customHeaders.length > 0) {
+      customHtml = `<div class="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">`;
+      customHeaders.forEach(ch => {
+        const val = d[ch.key] || '';
+        customHtml += `
+          <div class="flex items-center bg-slate-50 px-1.5 py-0.5 rounded text-[10px] border border-slate-200 shadow-sm">
+            <span class="text-slate-400 font-bold mr-1">${ch.label}:</span>
+            <input type="text" value="${val}" onchange="updateDockField('${d.id}', '${ch.key}', this.value)" class="bg-transparent font-bold text-slate-700 outline-none w-16 focus:w-24 transition-all" placeholder="-">
+          </div>`;
+      });
+      customHtml += `</div>`;
+    }
+
+    h += `
+    <div class="flex items-center gap-2 p-3 rounded-2xl border-2 border-slate-100 shadow-sm transition-all duration-300 ${rowClass}">
+      
+      <div class="flex items-center gap-2 w-[35%] shrink-0 border-r-2 border-slate-50 pr-2">
+        <input type="checkbox" ${d.done?'checked':''} onchange="toggleDockDone('${d.id}')" class="w-5 h-5 cursor-pointer accent-slate-900 rounded shrink-0">
+        <div class="flex flex-col justify-center cursor-pointer w-full overflow-hidden" onclick="editCarNum('${d.id}')">
+          <span class="text-[10px] font-bold text-slate-400 leading-none mb-1 truncate">${carPrefix}</span>
+          <span class="text-2xl sm:text-3xl font-black text-slate-900 leading-none tracking-tighter truncate">${carSuffix}</span>
+        </div>
+      </div>
+      
+      <div class="flex-1 flex flex-col gap-1.5 min-w-0 pl-1">
+        <div class="flex gap-1.5">
+          <input type="text" value="${d.type}" onchange="updateDockField('${d.id}', 'type', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="종류">
+          <input type="text" value="${d.origin}" onchange="updateDockField('${d.id}', 'origin', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="출발지">
+          <input type="text" value="${d.qty}" onchange="updateDockField('${d.id}', 'qty', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="수량">
+        </div>
+        <div class="flex gap-1.5">
+          <div class="w-1/2 flex items-center bg-indigo-50 px-1.5 py-1 rounded">
+            <span class="text-[9px] mr-1">🕒</span>
+            <input type="text" value="${timeDisplay}" onchange="updateDockField('${d.id}', 'time', this.value)" class="w-full bg-transparent text-[11px] font-black text-indigo-600 outline-none truncate" placeholder="시간">
+          </div>
+          <div class="w-1/2 flex items-center bg-blue-50 px-1.5 py-1 rounded">
+            <span class="text-[9px] mr-1">📞</span>
+            <input type="text" value="${d.phone}" onchange="updateDockField('${d.id}', 'phone', this.value)" class="w-full bg-transparent text-[11px] font-black text-blue-600 outline-none truncate" placeholder="연락처">
+          </div>
+        </div>
+        
+        ${customHtml}
+      </div>
+    </div>`;
+  });
+  
+  con.innerHTML = h;
+}
+
+/* =======================================
+   Cheri (체리뽀) Functions
+======================================= */
+let cheriTabSortable = null;
+let cheriItemSortable = null;
+
+function renderCheriUI() {
+  const tabList = document.getElementById('cheri-tab-list');
+  const content = document.getElementById('cheri-content');
+  if(!tabList || !content) return;
+
+  tabList.innerHTML = window.cheriData.tabs.map(t => {
+    const isActive = window.cheriData.activeTabId === t.id;
+    const bgClass = isActive ? 'bg-pink-500 text-white border-pink-500' : 'bg-white text-slate-600 border-pink-200';
+    const handleColor = isActive ? 'text-pink-200' : 'text-slate-300';
+    return `
+    <div class="cheri-tab px-4 py-2 rounded-full border-2 text-xs font-black shadow-sm shrink-0 flex items-center gap-1 cursor-pointer transition-all active:scale-95 ${bgClass}" data-id="${t.id}" onclick="setCheriTab(${t.id})">
+      <span class="tab-drag-handle text-[10px] cursor-grab ${handleColor}" onclick="event.stopPropagation()">☰</span>
+      <span style="${isActive ? 'color:white;' : ''}">${t.name}</span>
+      <button onclick="editCheriTab(${t.id}, event)" class="ml-1 opacity-60 hover:opacity-100 px-1 text-sm">✎</button>
+      ${t.id !== 1 ? `<button onclick="delCheriTab(${t.id}, event)" class="ml-1 opacity-60 hover:opacity-100">✕</button>` : ''}
+    </div>`;
+  }).join('') + `<button onclick="addCheriTab()" class="p-2 font-black text-pink-500 text-xs shrink-0 active:scale-90">+ 탭 추가</button>`;
+  
+  const items = window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId);
+  content.innerHTML = items.length ? items.map(i => `
+    <div class="bg-white p-4 rounded-2xl border-2 border-pink-100 flex items-center gap-3 shadow-sm cheri-card" data-id="${i.id}">
+      <span class="item-drag-handle text-pink-200 cursor-grab px-1">☰</span>
+      <div class="w-7 h-7 rounded-full border-2 border-pink-400 flex items-center justify-center shrink-0 cursor-pointer" onclick="toggleCheri(${i.id})">${i.done?'🍒':''}</div>
+      <span class="flex-1 font-bold ${i.done?'line-through text-pink-300':''} text-sm cursor-pointer" onclick="toggleCheri(${i.id})">${i.text}</span>
+      <button onclick="editCheriItem(${i.id}, event)" class="text-pink-500 bg-pink-50 px-3 py-1 rounded-lg font-black active:scale-95">수정</button>
+      <button onclick="delCheriItem(${i.id}, event)" class="text-pink-400 bg-pink-50 px-3 py-1 rounded-lg font-black active:scale-95">삭제</button>
+    </div>
+  `).join('') : '<p class="text-center py-10 opacity-30 font-black text-sm italic">비어있어뽀 🍒</p>';
+
+  if(cheriTabSortable) cheriTabSortable.destroy();
+  cheriTabSortable = new Sortable(tabList, {
+    animation: 150, 
+    handle: '.tab-drag-handle', 
+    filter: 'button',
+    preventOnFilter: false,
+    onEnd: function(evt) {
+      const moved = window.cheriData.tabs.splice(evt.oldIndex, 1)[0];
+      window.cheriData.tabs.splice(evt.newIndex, 0, moved);
+      localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI();
+    }
+  });
+
+  if(cheriItemSortable) cheriItemSortable.destroy();
+  cheriItemSortable = new Sortable(content, {
+    animation: 150, 
+    handle: '.item-drag-handle', 
+    filter: 'button',
+    preventOnFilter: false,
+    onEnd: function(evt) {
+      const curItems = window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId);
+      const restItems = window.cheriData.items.filter(i => i.tabId !== window.cheriData.activeTabId);
+      const moved = curItems.splice(evt.oldIndex, 1)[0];
+      curItems.splice(evt.newIndex, 0, moved);
+      window.cheriData.items = [...restItems, ...curItems];
+      localBackup(); if(window.syncToCloud) window.syncToCloud();
+    }
+  });
+}
+
+function toggleCheri(id) { const i = window.cheriData.items.find(x=>x.id===id); if(i) i.done = !i.done; localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function uncheckAllCheri() { window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId).forEach(i => i.done = false); localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+
+function addCheriItem() { 
+  const inp = document.getElementById('cheri-input'); 
+  if(!inp || !inp.value.trim()) return; 
+  window.cheriData.items.push({
+    id: Date.now(), 
+    tabId: window.cheriData.activeTabId, 
+    text: inp.value.trim(), 
+    done: false
+  }); 
+  inp.value=''; 
+  localBackup(); 
+  if(window.syncToCloud) window.syncToCloud(); 
+  renderCheriUI(); 
+}
+
+function editCheriItem(id, e) {
+  e.stopPropagation();
+  const item = window.cheriData.items.find(i => i.id === id);
+  if(!item) return;
+  const newText = prompt('할 일 내용 수정:', item.text);
+  if(newText && newText.trim()) {
+    item.text = newText.trim();
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    renderCheriUI();
+  }
+}
+
+function addCheriTab() { 
+  const n = prompt('새로운 탭 이름:'); 
+  if(n && n.trim()) { 
+    const id = Date.now(); 
+    window.cheriData.tabs.push({id, name: n.trim()}); 
+    window.cheriData.activeTabId = id; 
+    localBackup(); 
+    if(window.syncToCloud) window.syncToCloud(); 
+    renderCheriUI(); 
+  } 
+}
+
+function editCheriTab(id, e) {
+  e.stopPropagation();
+  const tab = window.cheriData.tabs.find(t => t.id === id);
+  if(!tab) return;
+  const newName = prompt('탭 이름 수정:', tab.name);
+  if(newName && newName.trim()) {
+    tab.name = newName.trim();
+    localBackup();
+    if(window.syncToCloud) window.syncToCloud();
+    renderCheriUI();
+  }
+}
+
+function delCheriTab(id, e) { 
+  e.stopPropagation(); 
+  if(!confirm('이 탭과 안의 내용을 모두 지울까?')) return; 
+  window.cheriData.tabs = window.cheriData.tabs.filter(t=>t.id!==id); 
+  window.cheriData.items = window.cheriData.items.filter(i=>i.tabId!==id); 
+  window.cheriData.activeTabId = window.cheriData.tabs[0].id; 
+  localBackup(); 
+  if(window.syncToCloud) window.syncToCloud(); 
+  renderCheriUI(); 
+}
+
+function delCheriItem(id, e) { 
+  e.stopPropagation(); 
+  window.cheriData.items = window.cheriData.items.filter(i=>i.id!==id); 
+  localBackup(); 
+  if(window.syncToCloud) window.syncToCloud(); 
+  renderCheriUI(); 
+}
+
+function setCheriTab(id) { 
+  window.cheriData.activeTabId = id; 
+  localBackup(); 
+  renderCheriUI(); 
+}
+
+let calcT = '', expr = '';
+function openCalc(t) { calcT = t; expr = ''; updateP(); document.getElementById('calc-modal').classList.add('open'); }
+function closeCalc() { document.getElementById('calc-modal').classList.remove('open'); }
+function pIn(v) { expr += v; updateP(); }
+function pOp(o) { if(expr && !isNaN(expr.slice(-1))) { expr += o; updateP(); } }
+function pC() { expr = ''; updateP(); }
+function pBk() { expr = expr.slice(0, -1); updateP(); }
+function pOk() { 
+  try { 
+    const res = eval(expr.replace(/[+\-*/]$/,'')) || 0; 
+    document.getElementById('m-'+calcT).value = res; 
+    closeCalc(); 
+  } catch(e) { alert("계산식이 이상해뽀!"); } 
+}
+function updateP() { 
+  document.getElementById('calc-formula').innerText = expr || '0'; 
+  try { document.getElementById('calc-preview').innerText = '= ' + (eval(expr.replace(/[+\-*/]$/,'')) || 0); } catch(e) {} 
+}
+
+function showToast(m) { 
+  const t=document.getElementById('toast'); 
+  t.innerText=m; t.style.opacity=1; t.style.transform='translate(-50%, 0)';
+  setTimeout(()=>{ t.style.opacity=0; t.style.transform='translate(-50%, 10px)'; }, 2000); 
+}
+
+function copyRT() { 
+  const v = document.getElementById('rt-vehicle').value; 
+  const u = document.getElementById('rt-unload').value || 0;
+  const l = document.getElementById('rt-load').value || 0;
+  if(!v) return alert('차량번호를 입력해뽀!'); 
+  const txt = `${v}, 하차 ${u}, 상차 ${l}`; 
+  navigator.clipboard.writeText(txt).then(()=>showToast('복사 완료!')); 
+}
+
+// 최초 실행
+router('landing');
+</script>
+</body>
+</html>

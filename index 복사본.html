@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>LOGISTICS HUB v15.1 (Cloud)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5elnzp59tYoTJ_7f1S67w94Cv9sqhHrs",
+    authDomain: "huburi-939df.firebaseapp.com",
+    projectId: "huburi-939df",
+    storageBucket: "huburi-939df.firebasestorage.app",
+    messagingSenderId: "975888471075",
+    appId: "1:975888471075:web:49596b4b27e35a2d370d96",
+    measurementId: "G-4Q82DMT5PB",
+    databaseURL: "https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/" 
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  window.db = db;
+  window.dbRef = ref(db, 'logistics_hub_data'); 
+
+  // 실시간 동기화 리스너
+  onValue(window.dbRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      window.shData = data.shData || { SD2: {}, D1: {} };
+      window.rtCheck = data.rtCheck || { SD2: {}, D1: {} };
+      window.shConfig = data.shConfig || { SD2: { fields: {} }, D1: { fields: {} } };
+      window.toteItems = data.toteItems || [{id: Date.now(), type: 'NORMAL', val: 0}];
+      window.dockData = data.dockData || [];
+      window.cheriData = data.cheriData || { tabs: [{id: 1, name: '기본'}], items: [], activeTabId: 1 };
+      
+      if(window.currentPage && typeof window.router === 'function') {
+        window.router(window.currentPage, true);
+      }
+    }
+  });
+
+  window.syncToCloud = () => {
+    update(window.dbRef, {
+      shData: window.shData,
+      rtCheck: window.rtCheck,
+      shConfig: window.shConfig,
+      toteItems: window.toteItems,
+      dockData: window.dockData,
+      cheriData: window.cheriData
+    }).catch(err => console.error("Sync Error:", err));
+  };
+</script>
+
+<style>
+:root { --jelly: cubic-bezier(0.34, 1.56, 0.64, 1); --smooth: cubic-bezier(0.4, 0, 0.2, 1); --t2: 260ms; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; display: flex; justify-content: center; align-items: flex-start; overflow-x: hidden; }
+#app-container { width: 100%; max-width: 480px; min-height: 100vh; background: #f8fafc; position: relative; box-shadow: 0 0 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+@media (min-width: 640px) { #app-container { margin: 20px 0; min-height: calc(100vh - 40px); border-radius: 32px; border: 8px solid #fff; overflow: hidden; } }
+.page-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.hidden { display: none !important; }
+.hazard-line { background: repeating-linear-gradient(45deg,#fbbf24,#fbbf24 10px,#000 10px,#000 20px); height: 6px; }
+.page-enter { animation: pageUp var(--t2) var(--jelly) both; }
+@keyframes pageUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* UI Components */
+.nav-btn { font-size: 1.3rem; padding: 8px; border-radius: 12px; transition: all 0.2s; }
+.nav-active { background: #0f172a; color: white; transform: scale(1.1); }
+.sh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
+.sh-tile { aspect-ratio: 1/0.9; border-radius: 20px; background: #fff; border: 2px solid #e2e8f0; font-weight: 900; font-style: italic; display: flex; align-items: center; justify-content: center; transition: all 0.2s; position: relative; }
+.sh-tile.filled { background: #0f172a; border-color: #fbbf24; color: #fbbf24; }
+.rt-check { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; border-radius: 4px; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 9999; align-items: flex-end; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal-sheet { width: 100%; max-width: 480px; background: #fff; border-radius: 28px 28px 0 0; padding: 20px; transform: translateY(100%); transition: transform 0.3s var(--jelly); box-shadow: 0 -10px 25px rgba(0,0,0,0.1); }
+.modal-overlay.open .modal-sheet { transform: translateY(0); }
+.modal-input-wrap { background: #f8fafc; border-radius: 15px; padding: 10px; border: 2px solid #e2e8f0; }
+.replace-box { display: flex; align-items: center; justify-content: space-between; background: #fff1f2; padding: 14px 18px; border-radius: 20px; border: 2px solid #fecdd3; margin-bottom: 20px; }
+.switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; inset: 0; background-color: #cbd5e1; transition: .3s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+input:checked + .slider { background-color: #e11d48; }
+input:checked + .slider:before { transform: translateX(24px); }
+.fixed-bottom-wrap { position: fixed; bottom: 0; width: 100%; max-width: 480px; z-index: 100; }
+.dock-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.dock-table th { background: #f8fafc; padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+.dock-table td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; }
+.drag-handle { cursor: grab; color: #cbd5e1; padding-right: 10px; font-size: 1.2rem; }
+</style>
+</head>
+<body>
+
+<div id="app-container">
+  <header id="main-header" class="hidden sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b">
+    <div class="hazard-line"></div>
+    <div class="flex items-center justify-between px-4 py-2">
+      <div class="flex gap-1">
+        <button onclick="router('sh')" id="nav-sh" class="nav-btn">🚚</button>
+        <button onclick="router('tote')" id="nav-tote" class="nav-btn">✨</button>
+        <button onclick="router('rt')" id="nav-rt" class="nav-btn">🚛</button>
+        <button onclick="router('dock')" id="nav-dock" class="nav-btn">📋</button>
+        <button onclick="router('cheri')" id="nav-cheri" class="nav-btn">🍒</button>
+      </div>
+      <span class="text-[10px] font-black text-slate-400">HUB v15.1</span>
+    </div>
+    <div id="sh-tabs" class="hidden flex border-t bg-slate-50">
+      <button id="tab-sd2" class="flex-1 py-3 font-black text-xs" onclick="switchZone('SD2')">SD2 ZONE</button>
+      <button id="tab-d1" class="flex-1 py-3 font-black text-xs" onclick="switchZone('D1')">D1 ZONE</button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div id="page-landing" class="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-50 text-center">
+      <h1 class="text-5xl font-black italic mb-10 leading-none">LOGISTICS<br><span class="text-indigo-600">HUB</span></h1>
+      <div class="grid grid-cols-1 gap-3 w-full max-w-xs">
+        <button onclick="router('sh')" class="bg-slate-900 text-white p-5 rounded-3xl font-black italic flex justify-between shadow-lg"><span>🚚 SH REPORT</span> <span>▶</span></button>
+        <button onclick="router('tote')" class="bg-indigo-600 text-white p-5 rounded-3xl font-black italic flex justify-between shadow-lg"><span>✨ TOTE MASTER</span> <span>▶</span></button>
+        <button onclick="router('dock')" class="bg-emerald-600 text-white p-5 rounded-3xl font-black italic flex justify-between shadow-lg"><span>📋 차량 정보 확인</span> <span>▶</span></button>
+        <button onclick="router('rt')" class="bg-amber-500 text-white p-5 rounded-3xl font-black italic flex justify-between shadow-lg"><span>🚛 RT 상하차</span> <span>▶</span></button>
+        <button onclick="router('cheri')" class="bg-pink-500 text-white p-5 rounded-3xl font-black italic flex justify-between shadow-lg"><span>🍒 체리뽀 CHECK</span> <span>▶</span></button>
+      </div>
+    </div>
+
+    <div id="page-sh" class="hidden">
+      <div class="p-4 flex justify-between items-center bg-white border-b">
+        <span class="font-black text-slate-800 italic" id="sh-title">SD2 REPORT</span>
+        <button onclick="resetCurrentZone()" class="text-[10px] font-black text-red-500 border border-red-200 px-3 py-1 rounded-full">ZONE RESET</button>
+      </div>
+      <div id="sh-grid" class="sh-grid"></div>
+    </div>
+
+    <div id="page-tote" class="hidden min-h-screen bg-[#08080c] text-white pb-40">
+      <div class="p-6 flex justify-between items-center">
+        <h2 class="text-2xl font-black italic text-indigo-400">TOTE MASTER</h2>
+        <button onclick="addToteItem()" class="bg-indigo-600 px-4 py-2 rounded-xl text-xs font-black">+ 추가</button>
+      </div>
+      <div id="tote-list" class="px-6"></div>
+      <div class="fixed-bottom-wrap" onclick="copyToteTotal()">
+        <div class="p-6 bg-black border-t-4 border-emerald-400 text-center">
+          <span id="tote-grand-total" class="text-5xl font-black text-emerald-400">0</span>
+          <p class="text-[10px] text-slate-500 mt-1 font-bold">탭하여 합계 복사 🍒</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-dock" class="hidden p-5 bg-white min-h-screen">
+      <h2 class="text-2xl font-black italic mb-4">📋 차량 정보 확인</h2>
+      <div class="mb-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed">
+        <textarea id="excel-input" class="w-full h-24 bg-transparent outline-none text-sm font-medium" placeholder="엑셀 복붙..."></textarea>
+        <button onclick="parseExcelData()" class="w-full mt-3 bg-slate-900 text-white py-3 rounded-xl font-black">적용</button>
+      </div>
+      <div id="dock-container"></div>
+    </div>
+
+    <div id="page-rt" class="hidden p-5">
+      <h2 class="text-2xl font-black italic mb-5">🚛 RT 상하차</h2>
+      <div class="bg-white rounded-3xl p-5 shadow-xl border flex flex-col gap-4">
+        <input type="text" id="rt-vehicle" class="w-full p-4 bg-slate-100 rounded-2xl font-black text-xl outline-none" placeholder="차량 번호">
+        <input type="number" id="rt-unload" class="w-full p-4 bg-blue-50 rounded-2xl font-black text-xl text-blue-600 outline-none" placeholder="하차 RT">
+        <input type="number" id="rt-load" class="w-full p-4 bg-emerald-50 rounded-2xl font-black text-xl text-emerald-600 outline-none" placeholder="상차 RT">
+        <button onclick="copyRT()" class="bg-slate-900 text-white py-4 rounded-2xl font-black">복사</button>
+      </div>
+    </div>
+
+    <div id="page-cheri" class="hidden p-4 bg-pink-50 min-h-screen pb-32">
+      <div id="cheri-tab-list" class="flex gap-2 overflow-x-auto mb-4 pb-2"></div>
+      <div id="cheri-content" class="flex flex-col gap-2"></div>
+      <div class="fixed-bottom-wrap">
+        <div class="p-4 bg-white border-t flex gap-2">
+          <input type="text" id="cheri-input" class="flex-1 p-3 bg-pink-50 rounded-full outline-none font-bold" placeholder="할 일 입력해뽀 🍒">
+          <button onclick="addCheriItem()" class="bg-pink-500 text-white w-12 h-12 rounded-full font-black text-xl">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sh-modal" class="modal-overlay" onclick="if(event.target===this)closeShModal()">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-6">
+      <h2 id="modal-sh-name" class="text-2xl font-black italic underline decoration-blue-400 decoration-4 underline-offset-4"></h2>
+      <button onclick="openFieldManager()" class="text-xs font-black bg-blue-100 text-blue-700 px-3 py-1 rounded-full">+ 존 관리</button>
+    </div>
+    <div id="modal-fields" class="grid grid-cols-3 gap-2 mb-4"></div>
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      <div class="modal-input-wrap cursor-pointer" onclick="openCalc('tote')">
+        <label class="text-[9px] font-black text-slate-400 uppercase">Tote 🧮</label>
+        <input id="m-tote" readonly class="w-full bg-transparent font-black text-lg outline-none pointer-events-none" placeholder="0">
+      </div>
+      <div class="modal-input-wrap">
+        <label class="text-[9px] font-black text-slate-400 uppercase">각대</label>
+        <input id="m-kd" type="number" class="w-full bg-transparent font-black text-lg outline-none" placeholder="0">
+      </div>
+    </div>
+    <textarea id="m-note" class="w-full p-4 bg-slate-100 rounded-2xl font-bold mb-4 outline-none h-20" placeholder="특이사항 입력"></textarea>
+    <div class="replace-box">
+      <span class="font-black text-rose-600 text-sm italic">📦 토트 대체 마감</span>
+      <label class="switch"><input type="checkbox" id="m-replace-check" onchange="handleReplaceToggle(this.checked)"><span class="slider"></span></label>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="resetShItem()" class="flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-400">초기화</button>
+      <button onclick="saveAndCopySh()" class="flex-[2] bg-slate-900 text-white py-4 rounded-2xl font-black italic shadow-lg">저장 & 복사</button>
+    </div>
+  </div>
+</div>
+
+<div id="field-modal" class="modal-overlay" onclick="if(event.target===this)closeFieldManager()">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-black italic">팔레트존 순서 관리</h3>
+      <span class="text-[10px] text-slate-400 font-bold">드래그 가능</span>
+    </div>
+    <div id="field-list" class="flex flex-col gap-2 mb-6 max-h-60 overflow-y-auto"></div>
+    <div class="bg-slate-50 p-4 rounded-2xl border-2">
+      <input id="new-field-label" type="text" class="w-full bg-white border rounded-xl p-3 font-bold mb-2 outline-none" placeholder="새 존 이름">
+      <button onclick="addNewField()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-black">존 추가하기</button>
+    </div>
+    <button onclick="closeFieldManager()" class="w-full mt-4 text-slate-400 font-bold">닫기</button>
+  </div>
+</div>
+
+<div id="calc-modal" class="modal-overlay">
+  <div class="modal-sheet bg-slate-900">
+    <div class="bg-black/50 p-4 rounded-2xl mb-4 text-right text-white">
+      <div id="calc-formula" class="text-white/50 text-sm">0</div>
+      <div id="calc-preview" class="text-emerald-400 text-3xl font-black">= 0</div>
+    </div>
+    <div class="grid grid-cols-4 gap-2">
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('7')">7</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('8')">8</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('9')">9</button>
+      <button class="pad-btn bg-red-600 text-white rounded-xl py-4 font-black" onclick="pC()">C</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('4')">4</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('5')">5</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('6')">6</button>
+      <button class="pad-btn bg-indigo-600 text-white rounded-xl py-4 font-black" onclick="pOp('+')">+</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('1')">1</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('2')">2</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('3')">3</button>
+      <button class="pad-btn bg-indigo-600 text-white rounded-xl py-4 font-black" onclick="pOp('-')">-</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pIn('0')">0</button>
+      <button class="pad-btn bg-slate-700 text-white rounded-xl py-4 font-black" onclick="pBk()">⌫</button>
+      <button class="pad-btn col-span-2 bg-emerald-600 text-white rounded-xl py-4 font-black" onclick="pOk()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-emerald-400 px-6 py-3 rounded-full font-black text-sm opacity-0 pointer-events-none transition-all z-[9999]"></div>
+
+<script>
+/* ==================== GLOBAL STATE ==================== */
+window.currentPage = 'landing';
+let activeZone = 'SD2', currentSh = null;
+
+// Firebase 연동 전 초기 로컬 데이터
+window.shData = { SD2: {}, D1: {} };
+window.rtCheck = { SD2: {}, D1: {} };
+window.shConfig = { SD2: { fields: {} }, D1: { fields: {} } };
+window.toteItems = [{id: Date.now(), type: 'NORMAL', val: 0}];
+window.dockData = [];
+window.cheriData = { tabs: [{id: 1, name: '기본'}], items: [], activeTabId: 1 };
+
+const ZONES = {
+  SD2: ['시흥2SH','서초1SH','송파1SH','송파3SH','화성1SH','동탄1SH','군포1SH','야탑1SH','일산1SH','일산2SH','일산3SH','안산1SH','안양1SH'],
+  D1: ['시흥2SH','송파1SH','송파3SH','화성1SH','동탄1SH','군포1SH','야탑1SH','일산1SH','일산2SH','안양1SH','전주1SH','인천3SH','청주1SH','천안1SH','인천7SH','인천2SH','야탑2SH','대전2SH','안산1SH','동인천2SH']
+};
+
+function getFields(z, n) {
+  if(window.shConfig[z].fields[n]) return window.shConfig[z].fields[n];
+  if(n === '인천7SH') return [{key:'nu', label:'누'},{key:'mun', label:'문'},{key:'ts', label:'토트'}];
+  if(z === 'D1' && n === '야탑1SH') return [{key:'yt1', label:'야탑1'},{key:'yt2', label:'야탑2'},{key:'ssi', label:'쓰'}];
+  return [{key:'pt', label:'PT'}];
+}
+
+/* ==================== ROUTER ==================== */
+function router(p, isSync = false) {
+  if(!isSync) {
+    document.querySelectorAll('body div[id^="page"]').forEach(el => el.classList.add('hidden'));
+    const target = document.getElementById('page-' + p);
+    if(target) { target.classList.remove('hidden'); target.classList.add('page-enter'); }
+    document.getElementById('main-header').classList.toggle('hidden', p === 'landing');
+    document.getElementById('sh-tabs').classList.toggle('hidden', p !== 'sh');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-active'));
+    if(document.getElementById('nav-'+p)) document.getElementById('nav-'+p).classList.add('nav-active');
+    window.currentPage = p;
+  }
+  
+  if(p === 'sh') renderGrid();
+  if(p === 'tote') renderToteList();
+  if(p === 'dock') renderDockTable();
+  if(p === 'cheri') renderCheriUI();
+  document.querySelector('.page-content').scrollTop = 0;
+}
+
+/* ==================== SH REPORT ==================== */
+function renderGrid() {
+  const g = document.getElementById('sh-grid'); g.innerHTML = '';
+  document.getElementById('sh-title').innerText = `${activeZone} REPORT`;
+  ZONES[activeZone].forEach(name => {
+    const d = window.shData[activeZone][name] || {};
+    const filled = Object.keys(d).some(k => k!=='note' && k!=='isReplace' && (d[k]>0));
+    const done = window.rtCheck[activeZone][name];
+    const tile = document.createElement('div');
+    tile.className = `sh-tile ${filled ? 'filled' : ''} ${done ? 'done' : ''}`;
+    tile.innerHTML = `<div class="rt-check" onclick="toggleRt(event, '${name}')">${done?'✓':''}</div><span>${name.replace('SH','')}</span>`;
+    tile.onclick = () => openShModal(name);
+    g.appendChild(tile);
+  });
+  document.getElementById('tab-sd2').className = `flex-1 py-3 font-black text-xs ${activeZone==='SD2'?'bg-white border-b-4 border-slate-900':'text-slate-400'}`;
+  document.getElementById('tab-d1').className = `flex-1 py-3 font-black text-xs ${activeZone==='D1'?'bg-white border-b-4 border-slate-900':'text-slate-400'}`;
+}
+
+function openShModal(name) {
+  currentSh = name;
+  const fields = getFields(activeZone, name);
+  const data = window.shData[activeZone][name] || {};
+  document.getElementById('modal-sh-name').innerText = name;
+  document.getElementById('modal-fields').innerHTML = fields.map(f => `
+    <div class="modal-input-wrap">
+      <label class="text-[8px] font-black text-slate-400 uppercase">${f.label}</label>
+      <input type="number" id="m-${f.key}" value="${data[f.key]||''}" class="w-full bg-transparent font-black text-lg outline-none" placeholder="0">
+    </div>`).join('');
+  document.getElementById('m-tote').value = data.tote || '';
+  document.getElementById('m-kd').value = data.kd || '';
+  document.getElementById('m-note').value = data.note || '';
+  document.getElementById('m-replace-check').checked = data.isReplace || false;
+  document.getElementById('sh-modal').classList.add('open');
+}
+
+function handleReplaceToggle(checked) {
+  if (checked) {
+    const noteEl = document.getElementById('m-note');
+    if (noteEl.value.trim() === '' || noteEl.value.trim() === '없음') {
+      noteEl.value = '';
+      noteEl.focus();
+    }
+  }
+}
+
+function saveAndCopySh() {
+  const fields = getFields(activeZone, currentSh);
+  if(!window.shData[activeZone][currentSh]) window.shData[activeZone][currentSh] = {};
+  let report = `**${currentSh}\n`;
+  fields.forEach(f => {
+    const v = document.getElementById(`m-${f.key}`).value;
+    window.shData[activeZone][currentSh][f.key] = v;
+    report += `${f.label} : ${v || 0}\n`;
+  });
+  window.shData[activeZone][currentSh].tote = document.getElementById('m-tote').value;
+  window.shData[activeZone][currentSh].kd = document.getElementById('m-kd').value;
+  window.shData[activeZone][currentSh].note = document.getElementById('m-note').value;
+  window.shData[activeZone][currentSh].isReplace = document.getElementById('m-replace-check').checked;
+  
+  report += `토트 : ${window.shData[activeZone][currentSh].tote || 0}\n각대 : ${window.shData[activeZone][currentSh].kd || 0}\n특이 : ${window.shData[activeZone][currentSh].note || '없음'}`;
+  if(window.shData[activeZone][currentSh].isReplace) report += ` (토트 대체)`;
+  
+  if(window.syncToCloud) window.syncToCloud();
+  navigator.clipboard.writeText(report).then(() => { showToast('저장 및 복사 완료! 🚚'); closeShModal(); renderGrid(); });
+}
+
+function toggleRt(e, n) { e.stopPropagation(); window.rtCheck[activeZone][n] = !window.rtCheck[activeZone][n]; if(window.syncToCloud) window.syncToCloud(); renderGrid(); }
+function closeShModal() { document.getElementById('sh-modal').classList.remove('open'); }
+function switchZone(z) { activeZone = z; renderGrid(); }
+function resetCurrentZone() { if(confirm('존 리셋?')) { window.shData[activeZone] = {}; window.rtCheck[activeZone] = {}; if(window.syncToCloud) window.syncToCloud(); renderGrid(); } }
+function resetShItem() { if(confirm('초기화?')) { delete window.shData[activeZone][currentSh]; if(window.syncToCloud) window.syncToCloud(); closeShModal(); renderGrid(); } }
+
+/* FIELD MANAGER */
+function openFieldManager() {
+  const fields = [...getFields(activeZone, currentSh)];
+  const list = document.getElementById('field-list');
+  renderFieldManagerList(fields);
+  document.getElementById('field-modal').classList.add('open');
+
+  new Sortable(list, {
+    animation: 150, handle: '.drag-handle',
+    onEnd: function() {
+      const newFields = [];
+      list.querySelectorAll('[data-key]').forEach(el => {
+        newFields.push({ key: el.getAttribute('data-key'), label: el.getAttribute('data-label') });
+      });
+      window.shConfig[activeZone].fields[currentSh] = newFields;
+      if(window.syncToCloud) window.syncToCloud();
+      openShModal(currentSh);
+    }
+  });
+}
+function renderFieldManagerList(fields) {
+  const list = document.getElementById('field-list');
+  list.innerHTML = fields.map((f, i) => `
+    <div class="flex justify-between items-center bg-white p-3 rounded-xl border" data-key="${f.key}" data-label="${f.label}">
+      <div class="flex items-center"><span class="drag-handle mr-2">☰</span><span class="font-bold text-sm">${f.label}</span></div>
+      <button onclick="removeField(${i})" class="text-red-400 font-black">✕</button>
+    </div>`).join('');
+}
+function addNewField() {
+  const label = document.getElementById('new-field-label').value.trim(); if(!label) return;
+  const fields = getFields(activeZone, currentSh); fields.push({key: 'c_'+Date.now(), label});
+  window.shConfig[activeZone].fields[currentSh] = fields;
+  if(window.syncToCloud) window.syncToCloud();
+  document.getElementById('new-field-label').value = ''; 
+  renderFieldManagerList(fields); openShModal(currentSh);
+}
+function removeField(i) {
+  const fields = getFields(activeZone, currentSh); fields.splice(i, 1);
+  window.shConfig[activeZone].fields[currentSh] = fields;
+  if(window.syncToCloud) window.syncToCloud();
+  renderFieldManagerList(fields); openShModal(currentSh);
+}
+function closeFieldManager() { document.getElementById('field-modal').classList.remove('open'); }
+
+/* TOTE MASTER */
+function addToteItem() { window.toteItems.push({id: Date.now(), type: 'NORMAL', val: 0}); if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+function renderToteList() {
+  const list = document.getElementById('tote-list'); list.innerHTML = ''; let g = 0;
+  window.toteItems.forEach((item, idx) => {
+    const conv = item.type === 'RT' ? Math.round(item.val * 80 / 96) : item.val; g += conv;
+    const card = document.createElement('div'); card.className = 'tm-card bg-slate-900 p-4 rounded-3xl mb-3 border border-slate-800 shadow-xl';
+    card.innerHTML = `<div class="flex justify-between mb-2"><select onchange="uTType(${idx},this.value)" class="bg-transparent text-indigo-400 text-xs font-black outline-none"><option value="NORMAL" ${item.type==='NORMAL'?'selected':''}>일반 합산</option><option value="RT" ${item.type==='RT'?'selected':''}>RT 환산 (80/96)</option></select><button onclick="rTItem(${idx})" class="text-red-500 text-[10px] font-black">DEL</button></div><div class="flex items-center gap-4"><input type="number" value="${item.val}" oninput="uTVal(${idx},this.value)" class="flex-1 bg-transparent text-3xl font-black outline-none border-b border-indigo-900 text-white focus:border-indigo-500"><div class="text-right text-indigo-300 font-black text-xl">${conv}</div></div>`;
+    list.appendChild(card);
+  });
+  document.getElementById('tote-grand-total').innerText = g.toLocaleString();
+}
+function uTVal(i, v) { window.toteItems[i].val = parseInt(v)||0; if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+function uTType(i, t) { window.toteItems[i].type = t; if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+function rTItem(i) { window.toteItems.splice(i,1); if(window.syncToCloud) window.syncToCloud(); renderToteList(); }
+
+/* DOCKING */
+function parseExcelData() {
+  const raw = document.getElementById('excel-input').value.trim(); if(!raw) return;
+  window.dockData = raw.split('\n').map(row => { const [carNum, type, time, phone] = row.split('\t'); return {carNum, type, time, phone}; });
+  if(window.syncToCloud) window.syncToCloud();
+  renderDockTable();
+}
+function renderDockTable() {
+  const con = document.getElementById('dock-container'); let h = `<table class="dock-table"><thead><tr><th>차량</th><th>종류</th><th>접안</th><th>전화</th></tr></thead><tbody>`;
+  window.dockData.forEach(d => h += `<tr><td class="font-bold">${d.carNum||'-'}</td><td>${d.type||'-'}</td><td class="text-indigo-600 font-black">${d.time||'-'}</td><td><a href="tel:${d.phone}" class="text-blue-500 underline font-bold">${d.phone||'-'}</a></td></tr>`);
+  con.innerHTML = h + `</tbody></table>`;
+}
+
+/* CHERI */
+function renderCheriUI() {
+  document.getElementById('cheri-tab-list').innerHTML = window.cheriData.tabs.map(t => `<div class="bg-white px-4 py-2 rounded-full border-2 border-pink-200 text-xs font-black ${window.cheriData.activeTabId===t.id?'bg-pink-500 text-white border-pink-500':''}" onclick="setCheriTab(${t.id})">${t.name}</div>`).join('') + `<button onclick="addCheriTab()" class="p-2 font-black text-pink-400 text-xs">+ 탭</button>`;
+  const items = window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId);
+  document.getElementById('cheri-content').innerHTML = items.length ? items.map(i => `<div class="bg-white p-4 rounded-2xl border-2 border-pink-100 flex items-center gap-3" onclick="toggleCheri(${i.id})"><div class="w-6 h-6 rounded-full border-2 border-pink-300 flex items-center justify-center">${i.done?'🍒':''}</div><span class="flex-1 font-bold ${i.done?'line-through text-pink-300':''}">${i.text}</span><button onclick="delCheriItem(${i.id},event)" class="text-pink-300 px-2 font-black">✕</button></div>`).join('') : '<p class="text-center py-10 opacity-30 font-black italic text-sm">비어있어뽀 🍒</p>';
+}
+function toggleCheri(id) { const i = window.cheriData.items.find(x=>x.id===id); if(i) i.done = !i.done; if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function addCheriItem() { const inp = document.getElementById('cheri-input'); if(!inp.value.trim()) return; window.cheriData.items.push({id:Date.now(), tabId:window.cheriData.activeTabId, text:inp.value.trim(), done:false}); inp.value=''; if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function addCheriTab() { const n = prompt('탭 이름:'); if(n) { const id=Date.now(); window.cheriData.tabs.push({id, name:n}); window.cheriData.activeTabId=id; if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); } }
+function delCheriItem(id, e) { e.stopPropagation(); window.cheriData.items = window.cheriData.items.filter(i=>i.id!==id); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function setCheriTab(id) { window.cheriData.activeTabId = id; if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+
+/* CALCULATOR */
+let calcT = '', expr = '';
+function openCalc(t) { calcT = t; expr = ''; updateP(); document.getElementById('calc-modal').classList.add('open'); }
+function closeCalc() { document.getElementById('calc-modal').classList.remove('open'); }
+function pIn(v) { expr += v; updateP(); }
+function pOp(o) { if(expr && !isNaN(expr.slice(-1))) { expr += o; updateP(); } }
+function pC() { expr = ''; updateP(); }
+function pBk() { expr = expr.slice(0, -1); updateP(); }
+function pOk() { try { const res = eval(expr.replace(/[+\-*/]$/,'')) || 0; document.getElementById('m-'+calcT).value = res; closeCalc(); } catch(e) {} }
+function updateP() { document.getElementById('calc-formula').innerText = expr || '0'; try { document.getElementById('calc-preview').innerText = '= ' + (eval(expr.replace(/[+\-*/]$/,'')) || 0); } catch(e) {} }
+
+/* UTILS */
+function showToast(m) { const t=document.getElementById('toast'); t.innerText=m; t.style.opacity=1; setTimeout(()=>t.style.opacity=0,2000); }
+function copyToteTotal() { navigator.clipboard.writeText(document.getElementById('tote-grand-total').innerText.replace(/,/g,'')).then(()=>showToast('합계 복사 완료! 🍒')); }
+function copyRT() { const v = document.getElementById('rt-vehicle').value; if(!v) return alert('차량번호 입력해!'); const txt = `${v}, 하차 ${document.getElementById('rt-unload').value||0}, 상차 ${document.getElementById('rt-load').value||0}`; navigator.clipboard.writeText(txt).then(()=>showToast('복사 완료!')); }
+
+router('landing');
+</script>
+</body>
+</html>
