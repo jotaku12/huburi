@@ -33,7 +33,11 @@
     window.cheriData = data.cheriData || {};
     if (!window.cheriData.tabs || window.cheriData.tabs.length === 0) window.cheriData.tabs = [{id: 1, name: '기본'}];
     if (!window.cheriData.items) window.cheriData.items = [];
-    if (!window.cheriData.activeTabId) window.cheriData.activeTabId = window.cheriData.tabs[0].id;
+    const savedCheriTabId = parseInt(localStorage.getItem('cheriActiveTabId_v15'), 10);
+    const legacyActiveTabId = window.cheriData.activeTabId;
+    const localTabId = window.cheriActiveTabId || savedCheriTabId || legacyActiveTabId;
+    window.cheriActiveTabId = window.cheriData.tabs.some(t => t.id === localTabId) ? localTabId : window.cheriData.tabs[0].id;
+    delete window.cheriData.activeTabId;
   };
 </script>
 
@@ -65,13 +69,14 @@
 
   window.syncToCloud = () => {
     if (!window.dbRef) return;
+    const { activeTabId, ...sharedCheriData } = window.cheriData || {};
     update(window.dbRef, {
       shData: window.shData,
       rtCheck: window.rtCheck,
       shConfig: window.shConfig,
       toteItems: window.toteItems,
       dockData: window.dockData,
-      cheriData: window.cheriData
+      cheriData: sharedCheriData
     }).then(() => console.log("Cloud synced! 🍒"));
   };
 </script>
@@ -952,13 +957,22 @@ function renderDockTable() {
 let cheriTabSortable = null;
 let cheriItemSortable = null;
 
+function getCheriActiveTabId() {
+  if(!window.cheriData.tabs.some(t => t.id === window.cheriActiveTabId)) {
+    window.cheriActiveTabId = window.cheriData.tabs[0].id;
+    localStorage.setItem('cheriActiveTabId_v15', String(window.cheriActiveTabId));
+  }
+  return window.cheriActiveTabId;
+}
+
 function renderCheriUI() {
   const tabList = document.getElementById('cheri-tab-list');
   const content = document.getElementById('cheri-content');
   if(!tabList || !content) return;
 
+  const activeTabId = getCheriActiveTabId();
   tabList.innerHTML = window.cheriData.tabs.map(t => {
-    const isActive = window.cheriData.activeTabId === t.id;
+    const isActive = activeTabId === t.id;
     const bgClass = isActive ? 'bg-pink-500 text-white border-pink-500' : 'bg-white text-slate-600 border-pink-200';
     const handleColor = isActive ? 'text-pink-200' : 'text-slate-300';
     return `
@@ -970,7 +984,7 @@ function renderCheriUI() {
     </div>`;
   }).join('') + `<button onclick="addCheriTab()" class="p-2 font-black text-pink-500 text-xs shrink-0 active:scale-90">+ 탭 추가</button>`;
   
-  const items = window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId);
+  const items = window.cheriData.items.filter(i => i.tabId === activeTabId);
   content.innerHTML = items.length ? items.map(i => `
     <div class="bg-white p-4 rounded-2xl border-2 border-pink-100 flex items-center gap-3 shadow-sm cheri-card" data-id="${i.id}">
       <span class="item-drag-handle text-pink-200 cursor-grab px-1">☰</span>
@@ -1001,8 +1015,9 @@ function renderCheriUI() {
     filter: 'button',
     preventOnFilter: false,
     onEnd: function(evt) {
-      const curItems = window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId);
-      const restItems = window.cheriData.items.filter(i => i.tabId !== window.cheriData.activeTabId);
+      const activeTabId = getCheriActiveTabId();
+      const curItems = window.cheriData.items.filter(i => i.tabId === activeTabId);
+      const restItems = window.cheriData.items.filter(i => i.tabId !== activeTabId);
       const moved = curItems.splice(evt.oldIndex, 1)[0];
       curItems.splice(evt.newIndex, 0, moved);
       window.cheriData.items = [...restItems, ...curItems];
@@ -1012,14 +1027,14 @@ function renderCheriUI() {
 }
 
 function toggleCheri(id) { const i = window.cheriData.items.find(x=>x.id===id); if(i) i.done = !i.done; localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
-function uncheckAllCheri() { window.cheriData.items.filter(i => i.tabId === window.cheriData.activeTabId).forEach(i => i.done = false); localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function uncheckAllCheri() { const activeTabId = getCheriActiveTabId(); window.cheriData.items.filter(i => i.tabId === activeTabId).forEach(i => i.done = false); localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
 
 function addCheriItem() { 
   const inp = document.getElementById('cheri-input'); 
   if(!inp || !inp.value.trim()) return; 
   window.cheriData.items.push({
     id: Date.now(), 
-    tabId: window.cheriData.activeTabId, 
+    tabId: getCheriActiveTabId(), 
     text: inp.value.trim(), 
     done: false
   }); 
@@ -1047,7 +1062,8 @@ function addCheriTab() {
   if(n && n.trim()) { 
     const id = Date.now(); 
     window.cheriData.tabs.push({id, name: n.trim()}); 
-    window.cheriData.activeTabId = id; 
+    window.cheriActiveTabId = id; 
+    localStorage.setItem('cheriActiveTabId_v15', String(id));
     localBackup(); 
     if(window.syncToCloud) window.syncToCloud(); 
     renderCheriUI(); 
@@ -1072,7 +1088,10 @@ function delCheriTab(id, e) {
   if(!confirm('이 탭과 안의 내용을 모두 지울까?')) return; 
   window.cheriData.tabs = window.cheriData.tabs.filter(t=>t.id!==id); 
   window.cheriData.items = window.cheriData.items.filter(i=>i.tabId!==id); 
-  window.cheriData.activeTabId = window.cheriData.tabs[0].id; 
+  if(window.cheriActiveTabId === id) {
+    window.cheriActiveTabId = window.cheriData.tabs[0].id;
+    localStorage.setItem('cheriActiveTabId_v15', String(window.cheriActiveTabId));
+  }
   localBackup(); 
   if(window.syncToCloud) window.syncToCloud(); 
   renderCheriUI(); 
@@ -1087,8 +1106,8 @@ function delCheriItem(id, e) {
 }
 
 function setCheriTab(id) { 
-  window.cheriData.activeTabId = id; 
-  localBackup(); 
+  window.cheriActiveTabId = id; 
+  localStorage.setItem('cheriActiveTabId_v15', String(id));
   renderCheriUI(); 
 }
 
