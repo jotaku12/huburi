@@ -30,15 +30,20 @@
     if (!window.shConfig.D1.fields) window.shConfig.D1.fields = {};
     window.toteItems = data.toteItems || [{id: Date.now(), type: 'NORMAL', val: 0, label: '항목 1'}];
     window.dockData = data.dockData || [];
-    window.cheriData = data.cheriData || {};
+  };
+
+  // 체리뽀는 사람마다 따로 쓰는 개인 체크리스트라서, 팀 공용 데이터(shData 등)와 분리된
+  // 개인 전용 클라우드 경로(닉네임 기준)에서 따로 동기화돼.
+  window.ensureCheriDataStructure = function(data) {
+    window.cheriData = data || {};
     if (!window.cheriData.tabs || window.cheriData.tabs.length === 0) window.cheriData.tabs = [{id: 1, name: '기본'}];
     if (!window.cheriData.items) window.cheriData.items = [];
     const savedCheriTabId = parseInt(localStorage.getItem('cheriActiveTabId_v15'), 10);
-    const legacyActiveTabId = window.cheriData.activeTabId;
-    const localTabId = window.cheriActiveTabId || savedCheriTabId || legacyActiveTabId;
+    const localTabId = window.cheriActiveTabId || savedCheriTabId;
     window.cheriActiveTabId = window.cheriData.tabs.some(t => t.id === localTabId) ? localTabId : window.cheriData.tabs[0].id;
-    delete window.cheriData.activeTabId;
   };
+  // 닉네임을 정하기 전에도 화면이 깨지지 않도록 기본값을 미리 채워둠
+  window.ensureCheriDataStructure(null);
 </script>
 
 <script type="module">
@@ -58,7 +63,7 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  window.dbRef = ref(db, 'logistics_hub_data'); 
+  window.dbRef = ref(db, 'logistics_hub_data');
 
   onValue(window.dbRef, (snapshot) => {
     window.ensureDataStructure(snapshot.val());
@@ -69,16 +74,42 @@
 
   window.syncToCloud = () => {
     if (!window.dbRef) return;
-    const { activeTabId, ...sharedCheriData } = window.cheriData || {};
     update(window.dbRef, {
       shData: window.shData,
       rtCheck: window.rtCheck,
       shConfig: window.shConfig,
       toteItems: window.toteItems,
-      dockData: window.dockData,
-      cheriData: sharedCheriData
+      dockData: window.dockData
     }).then(() => console.log("Cloud synced! 🍒"));
   };
+
+  // 체리뽀 개인 동기화: 닉네임별로 별도 경로를 써서 서로 다른 사람의 체크리스트가 섞이지 않게 함
+  let cheriUnsubscribe = null;
+  function sanitizeCheriKey(name) {
+    return String(name).trim().replace(/[.#$\[\]/]/g, '_') || 'guest';
+  }
+
+  window.bindCheriUser = (name) => {
+    window.cheriRef = ref(db, 'cheri_personal_data/' + sanitizeCheriKey(name));
+    if (cheriUnsubscribe) cheriUnsubscribe();
+    cheriUnsubscribe = onValue(window.cheriRef, (snapshot) => {
+      window.ensureCheriDataStructure(snapshot.val());
+      if (window.currentPage === 'cheri' && typeof window.renderCheriUI === 'function') {
+        window.renderCheriUI();
+      }
+    });
+  };
+
+  window.syncCheriToCloud = () => {
+    if (!window.cheriRef) return;
+    update(window.cheriRef, window.cheriData || {}).then(() => console.log("Cheri synced! 🍒"));
+  };
+
+  const savedCheriUserName = localStorage.getItem('cheriUserName_v15');
+  if (savedCheriUserName) {
+    window.cheriBoundUserName = savedCheriUserName;
+    window.bindCheriUser(savedCheriUserName);
+  }
 </script>
 
 <style>
@@ -213,6 +244,7 @@
     <div id="page-cheri" class="hidden p-4 bg-pink-50 min-h-screen pb-36">
       <div class="flex items-center gap-2 sticky top-0 bg-pink-50/90 z-10 mb-4 pb-2">
         <div id="cheri-tab-list" class="flex gap-2 overflow-x-auto no-scrollbar flex-1"></div>
+        <button onclick="changeCheriUserName()" class="shrink-0 bg-white border-2 border-pink-300 text-pink-500 w-10 h-10 flex items-center justify-center rounded-full font-black text-lg shadow active:scale-90" title="닉네임 변경">👤</button>
         <button onclick="uncheckAllCheri()" class="shrink-0 bg-white border-2 border-pink-300 text-pink-500 w-10 h-10 flex items-center justify-center rounded-full font-black text-lg shadow active:scale-90" title="체크 전체 해제">↺</button>
       </div>
       <div id="cheri-content" class="flex flex-col gap-3"></div>
@@ -300,7 +332,7 @@
     
     <div class="mb-4">
       <div class="flex justify-between items-end mb-2">
-        <p class="text-[11px] text-indigo-600 font-bold leading-tight">📋 항목 이동(☰) / 수정(이름 터치) / 삭제(✕)<br>불필요한 열은 지우고 엑셀 순서에 맞춰뽀!</p>
+        <p class="text-[11px] text-indigo-600 font-bold leading-tight">📋 항목 이동(☰) / 수정(이름 터치) / 삭제(✕)<br>엑셀에 헤더 행(제목 줄)을 포함해서 붙여넣으면 순서가 달라도 자동으로 인식돼!</p>
         <button onclick="addExcelHeader()" class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg active:scale-95 shrink-0 whitespace-nowrap">+ 새 항목 추가</button>
       </div>
       <div id="excel-header-list" class="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border-2 border-slate-200 min-h-[60px]">
@@ -308,7 +340,7 @@
     </div>
 
     <div class="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mb-4">
-      <textarea id="excel-input" class="w-full h-32 bg-transparent outline-none text-sm font-medium text-slate-700 leading-relaxed" placeholder="위 설정된 순서대로 복사된 엑셀 데이터를 여기에 붙여넣어뽀..."></textarea>
+      <textarea id="excel-input" class="w-full h-32 bg-transparent outline-none text-sm font-medium text-slate-700 leading-relaxed" placeholder="첫 줄에 헤더(차량번호, 종류...)를 포함해 붙여넣으면 자동 매칭돼. 헤더가 없으면 위 설정된 순서대로 들어가어..."></textarea>
     </div>
     <button onclick="parseExcelData()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition-transform shadow-xl">데이터 적용하기</button>
     <button onclick="closeExcelModal()" class="w-full mt-4 py-3 font-black text-slate-400">닫기</button>
@@ -346,10 +378,10 @@ const savedData = {
   rtCheck: JSON.parse(localStorage.getItem('rtCheck_v15')),
   shConfig: JSON.parse(localStorage.getItem('shConfig_v15')),
   toteItems: JSON.parse(localStorage.getItem('toteItems_v15')),
-  dockData: JSON.parse(localStorage.getItem('dockData_v15')),
-  cheriData: JSON.parse(localStorage.getItem('cheriData_v15'))
+  dockData: JSON.parse(localStorage.getItem('dockData_v15'))
 };
 window.ensureDataStructure(savedData);
+window.ensureCheriDataStructure(JSON.parse(localStorage.getItem('cheriData_v15')));
 
 function getFields(z, n) {
   if(window.shConfig[z] && window.shConfig[z].fields && window.shConfig[z].fields[n]) {
@@ -386,7 +418,7 @@ function router(p, isSync = false) {
   if(p === 'sh') renderGrid();
   if(p === 'tote') renderToteList();
   if(p === 'dock') renderDockTable();
-  if(p === 'cheri') renderCheriUI();
+  if(p === 'cheri') { ensureCheriUser(); renderCheriUI(); }
   if(!isSync) document.querySelector('.page-content').scrollTop = 0;
 }
 
@@ -771,22 +803,69 @@ function resetDockData() {
   renderDockTable();
 }
 
+function normalizeHeaderText(s) {
+  return (s || '').trim().replace(/\s+/g, '').toLowerCase();
+}
+
+// 붙여넣은 데이터의 첫 줄이 헤더 행인지 감지해서, 열 이름 -> key 매핑을 만들어줌
+function detectHeaderMapping(firstRowCols) {
+  const known = {};
+  defaultHeaders.forEach(h => known[normalizeHeaderText(h.label)] = h.key);
+  excelHeaders.forEach(h => { if(!(normalizeHeaderText(h.label) in known)) known[normalizeHeaderText(h.label)] = h.key; });
+
+  let matchCount = 0;
+  const mapping = firstRowCols.map(col => {
+    const key = known[normalizeHeaderText(col)];
+    if(key) matchCount++;
+    return key || null;
+  });
+
+  const nonEmptyCount = firstRowCols.filter(c => c.trim() !== '').length;
+  if(nonEmptyCount > 0 && matchCount >= Math.ceil(nonEmptyCount / 2)) return mapping;
+  return null;
+}
+
 function parseExcelData() {
-  const raw = document.getElementById('excel-input').value.trim(); 
+  const raw = document.getElementById('excel-input').value.trim();
   if(!raw) return;
 
-  const newItems = raw.split('\n').map(row => { 
-    const cols = row.split('\t'); 
-    let obj = { id: 'dock_' + Date.now() + Math.random().toString(36).substr(2, 9), done: false };
-    
-    // 설정된 헤더 순서대로 데이터 매핑
-    excelHeaders.forEach((h, idx) => {
-      obj[h.key] = cols[idx]?.trim() || '-';
+  const lines = raw.split('\n');
+  const firstRowCols = lines[0].split('\t');
+  const headerMapping = detectHeaderMapping(firstRowCols);
+
+  let dataLines = lines;
+  let colKeys = excelHeaders.map(h => h.key);
+
+  if(headerMapping) {
+    dataLines = lines.slice(1);
+    // 헤더 행에는 있지만 아직 설정에 없는 열은 새 항목으로 자동 추가
+    colKeys = firstRowCols.map((col, idx) => {
+      if(headerMapping[idx]) return headerMapping[idx];
+      const label = col.trim();
+      if(!label) return null;
+      let existing = excelHeaders.find(h => normalizeHeaderText(h.label) === normalizeHeaderText(label));
+      if(!existing) {
+        existing = { id: 'h_' + Date.now() + '_' + idx, key: 'custom_' + Date.now() + '_' + idx, label, isCore: false };
+        excelHeaders.push(existing);
+      }
+      return existing.key;
     });
-    
+    saveExcelHeaders();
+  }
+
+  const newItems = dataLines.filter(row => row.trim() !== '').map(row => {
+    const cols = row.split('\t');
+    let obj = { id: 'dock_' + Date.now() + Math.random().toString(36).substr(2, 9), done: false };
+
+    // 감지된 헤더 매핑(또는 설정된 헤더 순서)대로 데이터 매핑
+    colKeys.forEach((key, idx) => {
+      if(!key) return;
+      obj[key] = cols[idx]?.trim() || '-';
+    });
+
     // 필수 데이터 누락 방어
-    ['carNum','type','origin','qty','time','phone'].forEach(k => { 
-      if(!obj[k]) obj[k] = '-'; 
+    ['carNum','type','origin','qty','time','phone'].forEach(k => {
+      if(!obj[k]) obj[k] = '-';
     });
     
     return obj; 
@@ -799,7 +878,7 @@ function parseExcelData() {
   
   document.getElementById('excel-input').value = '';
   closeExcelModal();
-  showToast('데이터 적용 완료! 📋');
+  showToast(headerMapping ? '헤더 자동 인식 완료! 📋' : '데이터 적용 완료! 📋');
 }
 
 function toggleDockDone(id) {
@@ -1004,7 +1083,7 @@ function renderCheriUI() {
     onEnd: function(evt) {
       const moved = window.cheriData.tabs.splice(evt.oldIndex, 1)[0];
       window.cheriData.tabs.splice(evt.newIndex, 0, moved);
-      localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI();
+      localBackup(); if(window.syncCheriToCloud) window.syncCheriToCloud(); renderCheriUI();
     }
   });
 
@@ -1021,13 +1100,13 @@ function renderCheriUI() {
       const moved = curItems.splice(evt.oldIndex, 1)[0];
       curItems.splice(evt.newIndex, 0, moved);
       window.cheriData.items = [...restItems, ...curItems];
-      localBackup(); if(window.syncToCloud) window.syncToCloud();
+      localBackup(); if(window.syncCheriToCloud) window.syncCheriToCloud();
     }
   });
 }
 
-function toggleCheri(id) { const i = window.cheriData.items.find(x=>x.id===id); if(i) i.done = !i.done; localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
-function uncheckAllCheri() { const activeTabId = getCheriActiveTabId(); window.cheriData.items.filter(i => i.tabId === activeTabId).forEach(i => i.done = false); localBackup(); if(window.syncToCloud) window.syncToCloud(); renderCheriUI(); }
+function toggleCheri(id) { const i = window.cheriData.items.find(x=>x.id===id); if(i) i.done = !i.done; localBackup(); if(window.syncCheriToCloud) window.syncCheriToCloud(); renderCheriUI(); }
+function uncheckAllCheri() { const activeTabId = getCheriActiveTabId(); window.cheriData.items.filter(i => i.tabId === activeTabId).forEach(i => i.done = false); localBackup(); if(window.syncCheriToCloud) window.syncCheriToCloud(); renderCheriUI(); }
 
 function addCheriItem() { 
   const inp = document.getElementById('cheri-input'); 
@@ -1038,10 +1117,10 @@ function addCheriItem() {
     text: inp.value.trim(), 
     done: false
   }); 
-  inp.value=''; 
-  localBackup(); 
-  if(window.syncToCloud) window.syncToCloud(); 
-  renderCheriUI(); 
+  inp.value='';
+  localBackup();
+  if(window.syncCheriToCloud) window.syncCheriToCloud();
+  renderCheriUI();
 }
 
 function editCheriItem(id, e) {
@@ -1052,22 +1131,22 @@ function editCheriItem(id, e) {
   if(newText && newText.trim()) {
     item.text = newText.trim();
     localBackup();
-    if(window.syncToCloud) window.syncToCloud();
+    if(window.syncCheriToCloud) window.syncCheriToCloud();
     renderCheriUI();
   }
 }
 
-function addCheriTab() { 
-  const n = prompt('새로운 탭 이름:'); 
-  if(n && n.trim()) { 
-    const id = Date.now(); 
-    window.cheriData.tabs.push({id, name: n.trim()}); 
-    window.cheriActiveTabId = id; 
+function addCheriTab() {
+  const n = prompt('새로운 탭 이름:');
+  if(n && n.trim()) {
+    const id = Date.now();
+    window.cheriData.tabs.push({id, name: n.trim()});
+    window.cheriActiveTabId = id;
     localStorage.setItem('cheriActiveTabId_v15', String(id));
-    localBackup(); 
-    if(window.syncToCloud) window.syncToCloud(); 
-    renderCheriUI(); 
-  } 
+    localBackup();
+    if(window.syncCheriToCloud) window.syncCheriToCloud();
+    renderCheriUI();
+  }
 }
 
 function editCheriTab(id, e) {
@@ -1078,37 +1157,66 @@ function editCheriTab(id, e) {
   if(newName && newName.trim()) {
     tab.name = newName.trim();
     localBackup();
-    if(window.syncToCloud) window.syncToCloud();
+    if(window.syncCheriToCloud) window.syncCheriToCloud();
     renderCheriUI();
   }
 }
 
-function delCheriTab(id, e) { 
-  e.stopPropagation(); 
-  if(!confirm('이 탭과 안의 내용을 모두 지울까?')) return; 
-  window.cheriData.tabs = window.cheriData.tabs.filter(t=>t.id!==id); 
-  window.cheriData.items = window.cheriData.items.filter(i=>i.tabId!==id); 
+function delCheriTab(id, e) {
+  e.stopPropagation();
+  if(!confirm('이 탭과 안의 내용을 모두 지울까?')) return;
+  window.cheriData.tabs = window.cheriData.tabs.filter(t=>t.id!==id);
+  window.cheriData.items = window.cheriData.items.filter(i=>i.tabId!==id);
   if(window.cheriActiveTabId === id) {
     window.cheriActiveTabId = window.cheriData.tabs[0].id;
     localStorage.setItem('cheriActiveTabId_v15', String(window.cheriActiveTabId));
   }
-  localBackup(); 
-  if(window.syncToCloud) window.syncToCloud(); 
-  renderCheriUI(); 
+  localBackup();
+  if(window.syncCheriToCloud) window.syncCheriToCloud();
+  renderCheriUI();
 }
 
-function delCheriItem(id, e) { 
-  e.stopPropagation(); 
-  window.cheriData.items = window.cheriData.items.filter(i=>i.id!==id); 
-  localBackup(); 
-  if(window.syncToCloud) window.syncToCloud(); 
-  renderCheriUI(); 
+function delCheriItem(id, e) {
+  e.stopPropagation();
+  window.cheriData.items = window.cheriData.items.filter(i=>i.id!==id);
+  localBackup();
+  if(window.syncCheriToCloud) window.syncCheriToCloud();
+  renderCheriUI();
 }
 
-function setCheriTab(id) { 
-  window.cheriActiveTabId = id; 
+function setCheriTab(id) {
+  window.cheriActiveTabId = id;
   localStorage.setItem('cheriActiveTabId_v15', String(id));
-  renderCheriUI(); 
+  renderCheriUI();
+}
+
+function changeCheriUserName() {
+  const current = localStorage.getItem('cheriUserName_v15') || '';
+  const name = prompt('체리뽀에서 사용할 닉네임을 입력해뽀! (같은 닉네임을 쓰는 기기끼리만 체크리스트가 동기화돼)', current);
+  if(name === null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  localStorage.setItem('cheriUserName_v15', trimmed);
+  window.cheriActiveTabId = null;
+  window.ensureCheriDataStructure(null);
+  window.cheriBoundUserName = trimmed;
+  if(window.bindCheriUser) window.bindCheriUser(trimmed);
+  renderCheriUI();
+  showToast(`'${trimmed}'의 체리뽀로 전환했어! 🍒`);
+}
+
+function ensureCheriUser() {
+  let name = localStorage.getItem('cheriUserName_v15');
+  if(!name) {
+    name = prompt('체리뽀는 사람마다 따로 관리돼! 사용할 닉네임을 입력해뽀:');
+    name = (name || '').trim();
+    if(!name) return;
+    localStorage.setItem('cheriUserName_v15', name);
+  }
+  if(window.cheriBoundUserName !== name) {
+    window.cheriBoundUserName = name;
+    if(window.bindCheriUser) window.bindCheriUser(name);
+  }
 }
 
 let calcT = '', expr = '';

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(curl -s \"https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/logistics_hub_data/cheriData.json\")",
+      "Bash(curl -s \"https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/logistics_hub_data/cheriData.json\" -o /private/tmp/claude-501/-Users-badajo-Documents-Web-Projects------/4d8e4c24-83fe-4923-91db-7986a88bf56d/scratchpad/cheri_backup.json)",
+      "Bash(curl -s -X PUT -d @/private/tmp/claude-501/-Users-badajo-Documents-Web-Projects------/4d8e4c24-83fe-4923-91db-7986a88bf56d/scratchpad/cheri_backup.json \"https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/cheri_personal_data/bada.json\")",
+      "Bash(curl -s \"https://huburi-939df-default-rtdb.asia-southeast1.firebasedatabase.app/cheri_personal_data/bada.json\")"
+    ]
+  }
+}
