@@ -396,7 +396,7 @@ function renderGrid() {
   g.innerHTML = '';
   document.getElementById('sh-title').innerText = `${activeZone} REPORT`;
   
-  const list = window.shConfig[activeZone].list || window.RAW_ZONES[activeZone];
+  const list = [...(window.shConfig[activeZone].list || window.RAW_ZONES[activeZone])].sort((a, b) => a.localeCompare(b, 'ko'));
   list.forEach(name => {
     const d = window.shData[activeZone][name] || {};
     const filled = Object.keys(d).some(k => k!=='note' && k!=='isReplace' && (d[k]>0));
