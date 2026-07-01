@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAILY REPORT</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+:root {
+–bg: #0d1117;
+–surface: #161b22;
+–surface2: #21262d;
+–border: #30363d;
+–text: #e6edf3;
+–muted: #8b949e;
+–accent: #58a6ff;
+–green: #3fb950;
+–orange: #f0883e;
+–purple: #bc8cff;
+–red: #f85149;
+–yellow: #d29922;
+–day: #f0883e;
+–night: #58a6ff;
+}
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+font-family: ‘IBM Plex Sans KR’, sans-serif;
+background: var(–bg);
+color: var(–text);
+min-height: 100vh;
+}
+
+/* ── 헤더 ── */
+.header {
+background: var(–surface);
+border-bottom: 1px solid var(–border);
+padding: 16px 24px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+position: sticky;
+top: 0;
+z-index: 100;
+}
+
+.header-title {
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 18px;
+font-weight: 600;
+color: var(–accent);
+letter-spacing: 2px;
+}
+
+.header-right {
+display: flex;
+align-items: center;
+gap: 12px;
+}
+
+.file-btn {
+background: var(–accent);
+color: #0d1117;
+border: none;
+padding: 8px 16px;
+border-radius: 6px;
+font-family: ‘IBM Plex Sans KR’, sans-serif;
+font-size: 13px;
+font-weight: 600;
+cursor: pointer;
+transition: opacity 0.2s;
+}
+.file-btn:hover { opacity: 0.85; }
+
+.file-status {
+font-size: 12px;
+color: var(–muted);
+font-family: ‘IBM Plex Mono’, monospace;
+}
+
+/* ── 메인 레이아웃 ── */
+.main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+/* ── 날짜/기간 필터 ── */
+.filter-bar {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 10px;
+padding: 16px 20px;
+margin-bottom: 20px;
+display: flex;
+align-items: center;
+gap: 20px;
+flex-wrap: wrap;
+}
+
+.period-tabs {
+display: flex;
+background: var(–surface2);
+border-radius: 6px;
+padding: 3px;
+gap: 2px;
+}
+
+.period-tab {
+padding: 6px 16px;
+border-radius: 4px;
+font-size: 13px;
+font-weight: 500;
+cursor: pointer;
+border: none;
+background: transparent;
+color: var(–muted);
+transition: all 0.2s;
+}
+.period-tab.active {
+background: var(–accent);
+color: #0d1117;
+}
+
+.date-input {
+background: var(–surface2);
+border: 1px solid var(–border);
+color: var(–text);
+padding: 6px 12px;
+border-radius: 6px;
+font-size: 13px;
+font-family: ‘IBM Plex Mono’, monospace;
+}
+
+.filter-label {
+font-size: 12px;
+color: var(–muted);
+}
+
+.period-display {
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 13px;
+color: var(–accent);
+padding: 6px 12px;
+background: var(–surface2);
+border-radius: 6px;
+}
+
+/* ── 요약 카드 ── */
+.summary-grid {
+display: grid;
+grid-template-columns: 1fr 1fr 1fr;
+gap: 12px;
+margin-bottom: 20px;
+}
+
+.summary-card {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 10px;
+padding: 20px;
+position: relative;
+overflow: hidden;
+}
+
+.summary-card::before {
+content: ‘’;
+position: absolute;
+top: 0; left: 0; right: 0;
+height: 3px;
+}
+
+.summary-card.all::before { background: var(–green); }
+.summary-card.day::before { background: var(–day); }
+.summary-card.night::before { background: var(–night); }
+
+.card-label {
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 1.5px;
+text-transform: uppercase;
+margin-bottom: 16px;
+}
+
+.summary-card.all .card-label { color: var(–green); }
+.summary-card.day .card-label { color: var(–day); }
+.summary-card.night .card-label { color: var(–night); }
+
+.card-stats {
+display: grid;
+grid-template-columns: 1fr 1fr 1fr;
+gap: 12px;
+}
+
+.stat-item { }
+.stat-value {
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 24px;
+font-weight: 600;
+color: var(–text);
+line-height: 1;
+}
+.stat-unit { font-size: 12px; color: var(–muted); margin-top: 4px; }
+
+/* ── 섹션 ── */
+.section {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 10px;
+margin-bottom: 16px;
+overflow: hidden;
+}
+
+.section-header {
+padding: 14px 20px;
+background: var(–surface2);
+border-bottom: 1px solid var(–border);
+display: flex;
+align-items: center;
+justify-content: space-between;
+}
+
+.section-title {
+font-size: 13px;
+font-weight: 600;
+letter-spacing: 1px;
+text-transform: uppercase;
+color: var(–muted);
+}
+
+/* ── 테이블 ── */
+.table-wrap { overflow-x: auto; }
+
+table {
+width: 100%;
+border-collapse: collapse;
+font-size: 13px;
+}
+
+th {
+padding: 10px 14px;
+text-align: center;
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.5px;
+color: var(–muted);
+border-bottom: 1px solid var(–border);
+white-space: nowrap;
+background: var(–surface2);
+}
+
+td {
+padding: 10px 14px;
+text-align: center;
+border-bottom: 1px solid var(–border);
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 13px;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(88,166,255,0.05); }
+
+td.name {
+font-family: ‘IBM Plex Sans KR’, sans-serif;
+text-align: left;
+font-weight: 500;
+color: var(–text);
+}
+
+td.stopover {
+font-size: 11px;
+color: var(–purple);
+font-family: ‘IBM Plex Sans KR’, sans-serif;
+}
+
+td.dash { color: var(–border); }
+
+.val-all { color: var(–green); font-weight: 600; }
+.val-day { color: var(–day); }
+.val-night { color: var(–night); }
+
+/* ── CPT 관리 ── */
+.mgr-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 16px;
+margin-bottom: 16px;
+}
+
+.mgr-box {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 10px;
+padding: 16px;
+}
+
+.mgr-title {
+font-size: 12px;
+font-weight: 600;
+letter-spacing: 1px;
+text-transform: uppercase;
+color: var(–muted);
+margin-bottom: 12px;
+}
+
+.mgr-list {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+margin-bottom: 12px;
+}
+
+.mgr-tag {
+background: var(–surface2);
+border: 1px solid var(–border);
+border-radius: 4px;
+padding: 4px 10px;
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 12px;
+display: flex;
+align-items: center;
+gap: 6px;
+}
+
+.mgr-tag .del {
+color: var(–red);
+cursor: pointer;
+font-size: 14px;
+line-height: 1;
+}
+
+.mgr-input-row {
+display: flex;
+gap: 8px;
+}
+
+.mgr-input {
+flex: 1;
+background: var(–surface2);
+border: 1px solid var(–border);
+color: var(–text);
+padding: 6px 10px;
+border-radius: 5px;
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 13px;
+}
+
+.add-btn {
+background: var(–surface2);
+border: 1px solid var(–border);
+color: var(–green);
+padding: 6px 12px;
+border-radius: 5px;
+cursor: pointer;
+font-size: 18px;
+transition: background 0.2s;
+}
+.add-btn:hover { background: var(–border); }
+
+/* ── 인원 ── */
+.crew-grid {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 2px;
+padding: 16px;
+}
+
+.crew-row {
+display: contents;
+}
+
+.crew-cell {
+padding: 10px 14px;
+background: var(–surface2);
+font-size: 13px;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+.crew-cell.label {
+justify-content: flex-start;
+font-weight: 500;
+color: var(–text);
+background: var(–surface);
+border-right: 1px solid var(–border);
+}
+
+.crew-cell.header {
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.5px;
+color: var(–muted);
+text-transform: uppercase;
+}
+
+.crew-input {
+background: transparent;
+border: none;
+color: var(–accent);
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 14px;
+font-weight: 600;
+text-align: center;
+width: 60px;
+outline: none;
+}
+
+.crew-total {
+font-family: ‘IBM Plex Mono’, monospace;
+font-size: 14px;
+font-weight: 600;
+color: var(–green);
+}
+
+/* ── 메모 ── */
+.memo-area {
+width: 100%;
+background: var(–surface2);
+border: 1px solid var(–border);
+border-radius: 6px;
+color: var(–text);
+font-family: ‘IBM Plex Sans KR’, sans-serif;
+font-size: 13px;
+padding: 12px;
+resize: vertical;
+min-height: 80px;
+margin: 16px;
+width: calc(100% - 32px);
+}
+
+/* ── 업로드 영역 ── */
+.upload-area {
+border: 2px dashed var(–border);
+border-radius: 12px;
+padding: 60px;
+text-align: center;
+color: var(–muted);
+margin: 40px 0;
+transition: border-color 0.2s;
+}
+
+.upload-area.drag { border-color: var(–accent); }
+.upload-icon { font-size: 48px; margin-bottom: 16px; }
+.upload-text { font-size: 15px; margin-bottom: 8px; }
+.upload-sub { font-size: 13px; color: var(–border); }
+
+/* ── 반응형 ── */
+@media (max-width: 768px) {
+.summary-grid { grid-template-columns: 1fr; }
+.mgr-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">◈ DAILY REPORT</div>
+  <div class="header-right">
+    <span class="file-status" id="fileStatus">파일 없음</span>
+    <label class="file-btn">
+      📂 파일 불러오기
+      <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
+    </label>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 관리 영역 -->
+
+  <div class="mgr-grid">
+    <div class="mgr-box">
+      <div class="mgr-title">CPT 목록 (납품시각 HH:MM)</div>
+      <div class="mgr-list" id="cptList"></div>
+      <div class="mgr-input-row">
+        <input class="mgr-input" id="cptInput" placeholder="예: 14:00" maxlength="5">
+        <button class="add-btn" onclick="addCPT()">+</button>
+      </div>
+    </div>
+    <div class="mgr-box">
+      <div class="mgr-title">SH 목록 (종점명)</div>
+      <div class="mgr-list" id="shList"></div>
+      <div class="mgr-input-row">
+        <input class="mgr-input" id="shInput" placeholder="종점명 입력">
+        <button class="add-btn" onclick="addSH()">+</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 필터 바 -->
+
+  <div class="filter-bar">
+    <div class="period-tabs">
+      <button class="period-tab active" onclick="setPeriod('daily')">일별</button>
+      <button class="period-tab" onclick="setPeriod('weekly')">주간</button>
+      <button class="period-tab" onclick="setPeriod('monthly')">월간</button>
+    </div>
+    <div>
+      <span class="filter-label">날짜</span>
+      <input type="date" class="date-input" id="dateInput" onchange="render()">
+    </div>
+    <div class="period-display" id="periodDisplay">-</div>
+  </div>
+
+  <!-- 업로드 안내 -->
+
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📊</div>
+    <div class="upload-text">엑셀 파일을 불러오세요</div>
+    <div class="upload-sub">여러 파일 동시 선택 가능 (Ctrl+A) · ls_2026-04-28.xlsx 형식</div>
+  </div>
+
+  <!-- 대시보드 (데이터 로드 후 표시) -->
+
+  <div id="dashboard" style="display:none">
+
+```
+<!-- 전체/주간/야간 요약 -->
+<div class="summary-grid">
+  <div class="summary-card all">
+    <div class="card-label">전체</div>
+    <div class="card-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalCar">0</div>
+        <div class="stat-unit">차량</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalPT">0</div>
+        <div class="stat-unit">PT</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalKakdae">0</div>
+        <div class="stat-unit">각대</div>
+      </div>
+    </div>
+  </div>
+  <div class="summary-card day">
+    <div class="card-label">주간 (06:00~17:30)</div>
+    <div class="card-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="dayCar">0</div>
+        <div class="stat-unit">차량</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="dayPT">0</div>
+        <div class="stat-unit">PT</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="dayKakdae">0</div>
+        <div class="stat-unit">각대</div>
+      </div>
+    </div>
+  </div>
+  <div class="summary-card night">
+    <div class="card-label">야간</div>
+    <div class="card-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="nightCar">0</div>
+        <div class="stat-unit">차량</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="nightPT">0</div>
+        <div class="stat-unit">PT</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="nightKakdae">0</div>
+        <div class="stat-unit">각대</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CPT별 -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-title">CPT별 (납품시각 기준)</span>
+  </div>
+  <div class="table-wrap">
+    <table id="cptTable">
+      <thead>
+        <tr>
+          <th>CPT</th>
+          <th>전체 차량</th><th>전체 PT</th><th>전체 각대</th>
+          <th style="color:var(--day)">주간 차량</th><th style="color:var(--day)">주간 PT</th>
+          <th style="color:var(--night)">야간 차량</th><th style="color:var(--night)">야간 PT</th>
+        </tr>
+      </thead>
+      <tbody id="cptBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SH별 -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-title">SH별 (end 기준)</span>
+  </div>
+  <div class="table-wrap">
+    <table id="shTable">
+      <thead>
+        <tr>
+          <th>종점(SH)</th><th>경유거점</th>
+          <th>전체 차량</th><th>전체 PT</th><th>전체 각대</th>
+          <th style="color:var(--day)">주간 차량</th><th style="color:var(--day)">주간 PT</th>
+          <th style="color:var(--night)">야간 차량</th><th style="color:var(--night)">야간 PT</th>
+        </tr>
+      </thead>
+      <tbody id="shBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 인원 현황 -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-title">인원 현황</span>
+  </div>
+  <div style="padding:16px">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left">배치</th>
+          <th>캡틴</th><th>계약직</th><th>단기직</th><th>소계</th>
+        </tr>
+      </thead>
+      <tbody id="crewBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 특이사항 -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-title">특이사항 / 메모</span>
+  </div>
+  <textarea class="memo-area" placeholder="특이사항을 입력하세요..."></textarea>
+</div>
+```
+
+  </div>
+</div>
+
+<script>
+// ── 상태 ──
+let allData = [];
+let cptList = [];
+let shList = [];
+let period = 'daily';
+const areas = ['인덕션','PB','CB','메자닌','부자재','기타'];
+const crewTypes = ['캡틴','계약직','단기직'];
+let crewData = {};
+areas.forEach(a => { crewData[a] = {캡틴:0,계약직:0,단기직:0}; });
+
+// ── 파일 불러오기 ──
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  loadFiles(files);
+});
+
+function loadFiles(files) {
+  allData = [];
+  let loaded = 0;
+  let errors = [];
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const wb = XLSX.read(e.target.result, {type:'array', raw:false, cellDates:false});
+
+        // 시트 목록 로그
+        console.log('[' + file.name + '] 시트 목록:', wb.SheetNames);
+
+        // Loading 시트 찾기 (대소문자 무시, 공백 무시)
+        const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'loading')
+                       || wb.SheetNames[0];
+
+        console.log('[' + file.name + '] 사용 시트:', sheetName);
+
+        const ws = wb.Sheets[sheetName];
+
+        // 헤더 포함 전체 배열로 읽기
+        const rawArr = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        console.log('[' + file.name + '] 전체 행 수:', rawArr.length);
+
+        if (rawArr.length < 2) {
+          errors.push(file.name + ': 데이터 없음');
+          return;
+        }
+
+        // 1행이 헤더
+        const headers = rawArr[0].map(h => String(h).trim());
+        console.log('[' + file.name + '] 헤더:', headers);
+
+        // 파일명에서 날짜 추출
+        const namePart = file.name.replace('.xlsx','').replace('.xls','');
+        const dateStr = namePart.includes('_') ? namePart.split('_').slice(-1)[0] : namePart;
+        console.log('[' + file.name + '] 날짜:', dateStr);
+
+        // 2행부터 데이터
+        for (let i = 1; i < rawArr.length; i++) {
+          const rowArr = rawArr[i];
+          // 빈 행 스킵
+          if (rowArr.every(v => v === '' || v === null || v === undefined)) continue;
+
+          const row = {};
+          headers.forEach((h, idx) => {
+            row[h] = rowArr[idx] !== undefined ? String(rowArr[idx]) : '';
+          });
+
+          row['_날짜'] = dateStr;
+          row['_주간야간'] = getShift(row['접안요청'] || '');
+          row['_각대'] = extractKakdae(row);
+          allData.push(row);
+        }
+
+        console.log('[' + file.name + '] 로드된 행:', allData.length);
+
+      } catch(err) {
+        console.error('[' + file.name + '] 오류:', err);
+        errors.push(file.name + ': ' + err.message);
+      }
+
+      loaded++;
+      if (loaded === files.length) {
+        if (allData.length === 0) {
+          const msg = errors.length ? '오류: ' + errors.join(', ') : '데이터를 찾을 수 없습니다. 브라우저 콘솔(F12)을 확인하세요.';
+          document.getElementById('fileStatus').textContent = msg;
+          alert(msg + '\n\n시트 이름이 Loading(대소문자 정확히)인지 확인하세요.\n브라우저에서 F12 → Console 탭에서 상세 오류를 확인할 수 있습니다.');
+          return;
+        }
+
+        document.getElementById('fileStatus').textContent = `${files.length}개 파일 / ${allData.length}행 로드됨`;
+        document.getElementById('uploadArea').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        const dates = [...new Set(allData.map(r=>r['_날짜']))].sort();
+        if (dates.length) document.getElementById('dateInput').value = dates[dates.length-1];
+        render();
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── 주간/야간 판단 ──
+function getShift(dockTime) {
+  if (!dockTime) return null;
+  const str = String(dockTime);
+  // "2026-04-28 06:30:00" 형태에서 시간 추출
+  const timePart = str.length >= 16 ? str.substring(11,16) : str.substring(0,5);
+  const parts = timePart.split(':');
+  if (parts.length < 2) return null;
+  const hm = parseInt(parts[0]) * 100 + parseInt(parts[1]);
+  return (hm >= 600 && hm <= 1730) ? '주간' : '야간';
+}
+
+// ── 각대 추출 (텍스트에서 숫자 하나 추출) ──
+function extractKakdae(row) {
+  // 각대 컬럼이 있으면 우선 사용
+  const kakdaeCol = Object.keys(row).find(k => k.includes('각대'));
+  if (kakdaeCol && row[kakdaeCol] && !isNaN(Number(row[kakdaeCol]))) {
+    return Number(row[kakdaeCol]);
+  }
+  // 특이사항 컬럼에서 추출
+  const noteCol = Object.keys(row).find(k => k.includes('특이'));
+  if (noteCol && row[noteCol]) {
+    const note = String(row[noteCol]);
+    if (note.includes('각대')) {
+      const match = note.match(/\d+/);
+      if (match) return parseInt(match[0]);
+    }
+  }
+  return 0;
+}
+
+// ── CPT 시간 비교 (초 무시, HH:MM만 비교) ──
+function matchCPT(deliveryTime, cpt) {
+  if (!deliveryTime || !cpt) return false;
+  const dt = String(deliveryTime);
+  const timePart = dt.length >= 16 ? dt.substring(11,16) : dt.substring(0,5);
+  return timePart === cpt;
+}
+
+// ── 기간 필터 ──
+function setPeriod(p) {
+  period = p;
+  document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  render();
+}
+
+function getFilteredData() {
+  const dateVal = document.getElementById('dateInput').value;
+  if (!dateVal) return [];
+
+  return allData.filter(row => {
+    const d = row['_날짜'];
+    if (period === 'daily') return d === dateVal;
+    if (period === 'weekly') {
+      const base = new Date(dateVal);
+      const day = base.getDay(); // 0=일
+      const sun = new Date(base); sun.setDate(base.getDate() - day);
+      const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
+      const rd = new Date(d);
+      return rd >= sun && rd <= sat;
+    }
+    if (period === 'monthly') {
+      return d.substring(0,7) === dateVal.substring(0,7);
+    }
+    return false;
+  });
+}
+
+function getPeriodLabel() {
+  const dateVal = document.getElementById('dateInput').value;
+  if (!dateVal) return '-';
+  if (period === 'daily') return dateVal;
+  if (period === 'weekly') {
+    const base = new Date(dateVal);
+    const day = base.getDay();
+    const sun = new Date(base); sun.setDate(base.getDate() - day);
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
+    return `${fmtDate(sun)} ~ ${fmtDate(sat)}`;
+  }
+  if (period === 'monthly') return dateVal.substring(0,7);
+  return '-';
+}
+
+function fmtDate(d) {
+  return d.toISOString().substring(0,10);
+}
+
+// ── 렌더링 ──
+function render() {
+  document.getElementById('periodDisplay').textContent = getPeriodLabel();
+  const data = getFilteredData();
+  // stop(end) = 종점 기준으로 차량 카운트
+  const endData = data.filter(r => (r['경유 거점']||'').toLowerCase().includes('stop(end)'));
+
+  // 전체 요약
+  const totalCar = endData.length;
+  const totalPT = endData.reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+  const totalKakdae = data.reduce((s,r) => s + (r['_각대']||0), 0);
+  const dayCar = endData.filter(r => r['_주간야간']==='주간').length;
+  const dayPT = endData.filter(r => r['_주간야간']==='주간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+  const dayKakdae = data.filter(r => r['_주간야간']==='주간').reduce((s,r) => s + (r['_각대']||0), 0);
+  const nightCar = endData.filter(r => r['_주간야간']==='야간').length;
+  const nightPT = endData.filter(r => r['_주간야간']==='야간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+  const nightKakdae = data.filter(r => r['_주간야간']==='야간').reduce((s,r) => s + (r['_각대']||0), 0);
+
+  document.getElementById('totalCar').textContent = totalCar;
+  document.getElementById('totalPT').textContent = totalPT;
+  document.getElementById('totalKakdae').textContent = totalKakdae;
+  document.getElementById('dayCar').textContent = dayCar;
+  document.getElementById('dayPT').textContent = dayPT;
+  document.getElementById('dayKakdae').textContent = dayKakdae;
+  document.getElementById('nightCar').textContent = nightCar;
+  document.getElementById('nightPT').textContent = nightPT;
+  document.getElementById('nightKakdae').textContent = nightKakdae;
+
+  // CPT별
+  const cptBody = document.getElementById('cptBody');
+  cptBody.innerHTML = '';
+  cptList.forEach(cpt => {
+    const cptData = endData.filter(r => matchCPT(r['납품시각'], cpt));
+    const cptAll = data.filter(r => matchCPT(r['납품시각'], cpt));
+    const allCar = cptData.length;
+    const allPT = cptData.reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const allKd = cptAll.reduce((s,r) => s + (r['_각대']||0), 0);
+    const dayCar2 = cptData.filter(r => r['_주간야간']==='주간').length;
+    const dayPT2 = cptData.filter(r => r['_주간야간']==='주간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const nightCar2 = cptData.filter(r => r['_주간야간']==='야간').length;
+    const nightPT2 = cptData.filter(r => r['_주간야간']==='야간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="name">${cpt}</td>
+      <td class="val-all">${allCar}</td><td class="val-all">${allPT}</td><td class="val-all">${allKd}</td>
+      <td class="val-day">${dayCar2}</td><td class="val-day">${dayPT2}</td>
+      <td class="val-night">${nightCar2}</td><td class="val-night">${nightPT2}</td>
+    `;
+    cptBody.appendChild(tr);
+  });
+
+  // SH별
+  const shBody = document.getElementById('shBody');
+  shBody.innerHTML = '';
+  shList.forEach(sh => {
+    const shEndData = endData.filter(r => (r['종점']||'') === sh);
+    // Stopover 판단: 이 SH가 경유거점으로 등장하면
+    // stop(stopover) = 경유지로 등장하는 SH
+    const isStopover = data.some(r =>
+      (r['종점']||'') === sh &&
+      (r['경유 거점']||'').toLowerCase().includes('stop(stopover)')
+    );
+    const allCar = shEndData.length;
+    const allPT = shEndData.reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const allKd = data.filter(r => (r['종점']||'') === sh).reduce((s,r) => s + (r['_각대']||0), 0);
+    const dayCar2 = shEndData.filter(r => r['_주간야간']==='주간').length;
+    const dayPT2 = shEndData.filter(r => r['_주간야간']==='주간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const nightCar2 = shEndData.filter(r => r['_주간야간']==='야간').length;
+    const nightPT2 = shEndData.filter(r => r['_주간야간']==='야간').reduce((s,r) => s + (parseFloat(r['팔렛수'])||0), 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="name">${sh}</td>
+      <td class="${isStopover ? 'stopover' : 'dash'}">${isStopover ? 'Stopover' : '-'}</td>
+      <td class="val-all">${allCar}</td><td class="val-all">${allPT}</td><td class="val-all">${allKd}</td>
+      <td class="val-day">${dayCar2}</td><td class="val-day">${dayPT2}</td>
+      <td class="val-night">${nightCar2}</td><td class="val-night">${nightPT2}</td>
+    `;
+    shBody.appendChild(tr);
+  });
+
+  // 인원
+  renderCrew();
+}
+
+// ── 인원 렌더링 ──
+function renderCrew() {
+  const tbody = document.getElementById('crewBody');
+  tbody.innerHTML = '';
+  let totals = {캡틴:0,계약직:0,단기직:0};
+  areas.forEach(area => {
+    const tr = document.createElement('tr');
+    let subtotal = 0;
+    crewTypes.forEach(t => subtotal += crewData[area][t]||0);
+    totals.캡틴 += crewData[area].캡틴||0;
+    totals.계약직 += crewData[area].계약직||0;
+    totals.단기직 += crewData[area].단기직||0;
+    tr.innerHTML = `
+      <td class="name">${area}</td>
+      ${crewTypes.map(t => `<td><input class="crew-input" type="number" min="0"
+        value="${crewData[area][t]||''}"
+        onchange="crewData['${area}']['${t}']=parseInt(this.value)||0;renderCrew()"
+        placeholder="0"></td>`).join('')}
+      <td class="crew-total">${subtotal || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const totalRow = document.createElement('tr');
+  const grandTotal = totals.캡틴 + totals.계약직 + totals.단기직;
+  totalRow.style.borderTop = '2px solid var(--border)';
+  totalRow.innerHTML = `
+    <td class="name" style="color:var(--muted);font-weight:600">합계</td>
+    ${crewTypes.map(t => `<td style="color:var(--green);font-family:IBM Plex Mono,monospace;font-weight:600">${totals[t]||''}</td>`).join('')}
+    <td style="color:var(--green);font-family:IBM Plex Mono,monospace;font-weight:700;font-size:15px">${grandTotal||''}</td>
+  `;
+  tbody.appendChild(totalRow);
+}
+
+// ── CPT/SH 관리 ──
+function renderCPTList() {
+  const el = document.getElementById('cptList');
+  el.innerHTML = cptList.map((c,i) =>
+    `<span class="mgr-tag">${c}<span class="del" onclick="removeCPT(${i})">×</span></span>`
+  ).join('');
+  if (allData.length) render();
+}
+
+function renderSHList() {
+  const el = document.getElementById('shList');
+  el.innerHTML = shList.map((s,i) =>
+    `<span class="mgr-tag">${s}<span class="del" onclick="removeSH(${i})">×</span></span>`
+  ).join('');
+  if (allData.length) render();
+}
+
+function addCPT() {
+  const val = document.getElementById('cptInput').value.trim();
+  if (val && !cptList.includes(val)) { cptList.push(val); renderCPTList(); }
+  document.getElementById('cptInput').value = '';
+}
+
+function removeCPT(i) { cptList.splice(i,1); renderCPTList(); }
+
+function addSH() {
+  const val = document.getElementById('shInput').value.trim();
+  if (val && !shList.includes(val)) { shList.push(val); renderSHList(); }
+  document.getElementById('shInput').value = '';
+}
+
+function removeSH(i) { shList.splice(i,1); renderSHList(); }
+
+// Enter 키 지원
+document.getElementById('cptInput').addEventListener('keydown', e => { if(e.key==='Enter') addCPT(); });
+document.getElementById('shInput').addEventListener('keydown', e => { if(e.key==='Enter') addSH(); });
+
+// 드래그앤드롭
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('drag');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+  if (files.length) loadFiles(files);
+});
+
+// 오늘 날짜 기본값
+document.getElementById('dateInput').value = new Date().toISOString().substring(0,10);
+renderCrew();
+</script>
+
+</body>
+</html>
