@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>LOGISTICS HUB v15.7 (Cloud Final)</title>
+<title>LOGISTICS HUB v15.8 (Cloud Final)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
@@ -159,7 +159,7 @@
         <button onclick="router('dock')" id="nav-dock" class="nav-btn">📋</button>
         <button onclick="router('cheri')" id="nav-cheri" class="nav-btn">🍒</button>
       </div>
-      <span class="text-[10px] font-black text-slate-400">HUB v15.7</span>
+      <span class="text-[10px] font-black text-slate-400">HUB v15.8</span>
     </div>
     <div id="sh-tabs" class="hidden flex border-t bg-slate-50">
       <button id="tab-sd2" class="flex-1 py-3 font-black text-xs transition-all" onclick="switchZone('SD2')">SD2 ZONE</button>
@@ -216,16 +216,8 @@
         </div>
       </div>
       
-      <div class="mb-4 flex flex-col gap-2">
+      <div class="mb-4">
         <input type="text" id="dock-search" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none text-slate-800 shadow-sm focus:border-indigo-400 transition-colors" placeholder="🔍 차량번호 검색..." oninput="updateDockSearch(this.value)">
-        <div class="flex gap-2">
-          <select id="dock-filter-type" onchange="dockFilterType=this.value; renderDockTable()" class="flex-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 font-bold text-xs outline-none text-slate-700 shadow-sm">
-            <option value="">종류 (전체)</option>
-          </select>
-          <select id="dock-filter-origin" onchange="dockFilterOrigin=this.value; renderDockTable()" class="flex-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 font-bold text-xs outline-none text-slate-700 shadow-sm">
-            <option value="">출발지 (전체)</option>
-          </select>
-        </div>
       </div>
 
       <div id="dock-container" class="flex flex-col gap-3 min-h-[300px]"></div>
@@ -340,7 +332,7 @@
     </div>
 
     <div class="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mb-4">
-      <textarea id="excel-input" class="w-full h-32 bg-transparent outline-none text-sm font-medium text-slate-700 leading-relaxed" placeholder="첫 줄에 헤더(차량번호, 종류...)를 포함해 붙여넣으면 자동 매칭돼. 헤더가 없으면 위 설정된 순서대로 들어가어..."></textarea>
+      <textarea id="excel-input" class="w-full h-32 bg-transparent outline-none text-sm font-medium text-slate-700 leading-relaxed" placeholder="첫 줄에 헤더(차량번호, 출발지...)를 포함해 붙여넣으면 자동 매칭돼. 헤더가 없으면 위 설정된 순서대로 들어가어..."></textarea>
     </div>
     <button onclick="parseExcelData()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black active:scale-95 transition-transform shadow-xl">데이터 적용하기</button>
     <button onclick="closeExcelModal()" class="w-full mt-4 py-3 font-black text-slate-400">닫기</button>
@@ -355,20 +347,16 @@ let activeZone = 'SD2', currentSh = null;
 
 // Dock Variables & Dynamic Header Management
 let dockSearchTerm = '';
-let dockFilterType = '';
-let dockFilterOrigin = '';
 
 // 기본 헤더 구조 설정 (isCore: true인 항목은 핵심 필드로 간주)
 let defaultHeaders = [
   { id: 'h_carNum', key: 'carNum', label: '차량번호', isCore: true },
-  { id: 'h_type', key: 'type', label: '종류', isCore: true },
   { id: 'h_origin', key: 'origin', label: '출발지', isCore: true },
-  { id: 'h_qty', key: 'qty', label: '수량', isCore: true },
-  { id: 'h_time', key: 'time', label: '시간', isCore: true },
-  { id: 'h_phone', key: 'phone', label: '연락처', isCore: true }
+  { id: 'h_reqTime', key: 'reqTime', label: '요청 시간', isCore: true },
+  { id: 'h_useType', key: 'useType', label: '사용 유형', isCore: true }
 ];
 
-let excelHeaders = JSON.parse(localStorage.getItem('excelHeaders_v15_2'));
+let excelHeaders = JSON.parse(localStorage.getItem('excelHeaders_v16'));
 if (!excelHeaders || excelHeaders.length === 0) {
   excelHeaders = [...defaultHeaders];
 }
@@ -721,7 +709,7 @@ function copyToteReport() {
 let excelHeaderSortable = null;
 
 function saveExcelHeaders() {
-  localStorage.setItem('excelHeaders_v15_2', JSON.stringify(excelHeaders));
+  localStorage.setItem('excelHeaders_v16', JSON.stringify(excelHeaders));
 }
 
 // 모달 내 동적 헤더 렌더링
@@ -821,7 +809,7 @@ function detectHeaderMapping(firstRowCols) {
   });
 
   const nonEmptyCount = firstRowCols.filter(c => c.trim() !== '').length;
-  if(nonEmptyCount > 0 && matchCount >= Math.ceil(nonEmptyCount / 2)) return mapping;
+  if(nonEmptyCount > 0 && matchCount >= 1) return mapping;
   return null;
 }
 
@@ -864,7 +852,7 @@ function parseExcelData() {
     });
 
     // 필수 데이터 누락 방어
-    ['carNum','type','origin','qty','time','phone'].forEach(k => {
+    ['carNum','origin','reqTime','useType'].forEach(k => {
       if(!obj[k]) obj[k] = '-';
     });
     
@@ -921,20 +909,8 @@ function renderDockTable() {
   window.dockData.forEach(d => {
     if(!d.id) d.id = 'dock_' + Date.now() + Math.random().toString(36).substr(2, 9);
     if(d.origin === undefined) d.origin = '-';
-    if(d.qty === undefined) d.qty = '-';
     if(d.done === undefined) d.done = false;
   });
-
-  const typeSelect = document.getElementById('dock-filter-type');
-  const originSelect = document.getElementById('dock-filter-origin');
-  
-  const types = [...new Set(window.dockData.map(d => d.type))].filter(t => t !== '-');
-  const origins = [...new Set(window.dockData.map(d => d.origin))].filter(o => o !== '-');
-
-  if(typeSelect && originSelect) {
-    typeSelect.innerHTML = `<option value="">종류 (전체)</option>` + types.map(t => `<option value="${t}" ${dockFilterType===t?'selected':''}>${t}</option>`).join('');
-    originSelect.innerHTML = `<option value="">출발지 (전체)</option>` + origins.map(o => `<option value="${o}" ${dockFilterOrigin===o?'selected':''}>${o}</option>`).join('');
-  }
 
   if(window.dockData.length === 0) {
     con.innerHTML = `<p class="p-8 text-center text-slate-400 font-bold text-sm">입력된 차량 데이터가 없어뽀.</p>`;
@@ -943,8 +919,6 @@ function renderDockTable() {
 
   let filtered = window.dockData.filter(d => {
     if(dockSearchTerm && !d.carNum.includes(dockSearchTerm)) return false;
-    if(dockFilterType && d.type !== dockFilterType) return false;
-    if(dockFilterOrigin && d.origin !== dockFilterOrigin) return false;
     return true;
   });
 
@@ -953,13 +927,13 @@ function renderDockTable() {
     return;
   }
 
-  // 커스텀 헤더 필드 식별 (기본 6개 제외)
-  const customHeaders = excelHeaders.filter(h => !['carNum','type','origin','qty','time','phone'].includes(h.key));
+  // 차량번호를 제외한 나머지 헤더는 사용자가 정한 순서(엑셀 붙여넣기 모달의 항목 순서)대로 표시
+  const displayHeaders = excelHeaders.filter(h => h.key !== 'carNum');
 
   let h = '';
   filtered.forEach(d => {
     const rowClass = d.done ? 'bg-slate-100 grayscale opacity-60' : 'bg-white';
-    
+
     // 차량번호 정규식 파싱 (공백 포함하여 끝에 있는 4자리 숫자 분리)
     let carPrefix = d.carNum;
     let carSuffix = '';
@@ -968,35 +942,30 @@ function renderDockTable() {
       carPrefix = carMatch[1].trim();
       carSuffix = carMatch[2];
     } else {
-      carPrefix = ''; 
+      carPrefix = '';
       carSuffix = d.carNum;
     }
 
-    // 시간 정규식 파싱 (HH:MM 형식만 추출)
-    let timeDisplay = d.time;
-    const timeMatch = d.time.match(/\b(\d{1,2}:\d{2})\b/);
-    if(timeMatch) {
-      timeDisplay = timeMatch[1];
-    }
-
-    // 커스텀 데이터 칩(Chip) HTML 생성
-    let customHtml = '';
-    if(customHeaders.length > 0) {
-      customHtml = `<div class="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">`;
-      customHeaders.forEach(ch => {
-        const val = d[ch.key] || '';
-        customHtml += `
-          <div class="flex items-center bg-slate-50 px-1.5 py-0.5 rounded text-[10px] border border-slate-200 shadow-sm">
-            <span class="text-slate-400 font-bold mr-1">${ch.label}:</span>
-            <input type="text" value="${val}" onchange="updateDockField('${d.id}', '${ch.key}', this.value)" class="bg-transparent font-bold text-slate-700 outline-none w-16 focus:w-24 transition-all" placeholder="-">
-          </div>`;
-      });
-      customHtml += `</div>`;
-    }
+    // 나머지 항목들을 사용자가 설정한 순서대로 칩 형태로 렌더링 (시간/연락처는 아이콘으로 구분)
+    const fieldsHtml = displayHeaders.map(fh => {
+      let val = d[fh.key] !== undefined ? d[fh.key] : '-';
+      if(fh.key === 'reqTime') {
+        const timeMatch = String(val).match(/\b(\d{1,2}:\d{2})\b/);
+        if(timeMatch) val = timeMatch[1];
+      }
+      const icon = fh.key === 'reqTime' ? '🕒' : fh.key === 'useType' ? '🏷️' : '';
+      const bg = fh.key === 'reqTime' ? 'bg-indigo-50' : fh.key === 'useType' ? 'bg-amber-50' : 'bg-slate-50';
+      const valColor = fh.key === 'reqTime' ? 'text-indigo-600' : fh.key === 'useType' ? 'text-amber-600' : 'text-slate-700';
+      return `
+        <div class="flex items-center gap-1 ${bg} px-1.5 py-1 rounded text-[10px]">
+          ${icon ? `<span class="mr-0.5">${icon}</span>` : `<span class="text-slate-400 font-bold shrink-0">${fh.label}</span>`}
+          <input type="text" value="${val}" onchange="updateDockField('${d.id}', '${fh.key}', this.value)" class="min-w-0 flex-1 bg-transparent font-black ${valColor} outline-none truncate" placeholder="-">
+        </div>`;
+    }).join('');
 
     h += `
     <div class="flex items-center gap-2 p-3 rounded-2xl border-2 border-slate-100 shadow-sm transition-all duration-300 ${rowClass}">
-      
+
       <div class="flex items-center gap-2 w-[35%] shrink-0 border-r-2 border-slate-50 pr-2">
         <input type="checkbox" ${d.done?'checked':''} onchange="toggleDockDone('${d.id}')" class="w-5 h-5 cursor-pointer accent-slate-900 rounded shrink-0">
         <div class="flex flex-col justify-center cursor-pointer w-full overflow-hidden" onclick="editCarNum('${d.id}')">
@@ -1004,29 +973,13 @@ function renderDockTable() {
           <span class="text-2xl sm:text-3xl font-black text-slate-900 leading-none tracking-tighter truncate">${carSuffix}</span>
         </div>
       </div>
-      
-      <div class="flex-1 flex flex-col gap-1.5 min-w-0 pl-1">
-        <div class="flex gap-1.5">
-          <input type="text" value="${d.type}" onchange="updateDockField('${d.id}', 'type', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="종류">
-          <input type="text" value="${d.origin}" onchange="updateDockField('${d.id}', 'origin', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="출발지">
-          <input type="text" value="${d.qty}" onchange="updateDockField('${d.id}', 'qty', this.value)" class="w-1/3 bg-slate-50 text-[10px] font-bold text-slate-600 px-1 py-1 rounded outline-none focus:bg-slate-200 transition-colors text-center" placeholder="수량">
-        </div>
-        <div class="flex gap-1.5">
-          <div class="w-1/2 flex items-center bg-indigo-50 px-1.5 py-1 rounded">
-            <span class="text-[9px] mr-1">🕒</span>
-            <input type="text" value="${timeDisplay}" onchange="updateDockField('${d.id}', 'time', this.value)" class="w-full bg-transparent text-[11px] font-black text-indigo-600 outline-none truncate" placeholder="시간">
-          </div>
-          <div class="w-1/2 flex items-center bg-blue-50 px-1.5 py-1 rounded">
-            <span class="text-[9px] mr-1">📞</span>
-            <input type="text" value="${d.phone}" onchange="updateDockField('${d.id}', 'phone', this.value)" class="w-full bg-transparent text-[11px] font-black text-blue-600 outline-none truncate" placeholder="연락처">
-          </div>
-        </div>
-        
-        ${customHtml}
+
+      <div class="flex-1 flex flex-wrap gap-1.5 min-w-0 pl-1">
+        ${fieldsHtml}
       </div>
     </div>`;
   });
-  
+
   con.innerHTML = h;
 }
 
